@@ -25,6 +25,14 @@ except ValueError:
     raise ImproperlyConfigured("AUTH_USER_MODEL must be of the form"
                                " 'app_label.model_name'")
 
+# A setting that can be used in foreign key declarations
+INVOICE_MODEL = getattr(settings, 'INVOICE_MODEL', '')
+try:
+    INVOICE_MODEL_APP_LABEL, INVOICE_MODEL_MODEL_NAME = INVOICE_MODEL.rsplit('.', 1)
+except ValueError:
+    raise ImproperlyConfigured("INVOICE_MODEL must be of the form"
+                               " 'app_label.model_name'")
+
 
 def get_user_model():
     """

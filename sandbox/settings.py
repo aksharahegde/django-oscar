@@ -410,6 +410,8 @@ THUMBNAIL_REDIS_URL = env('THUMBNAIL_REDIS_URL', default=None)
 # in tests/config.py
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 
+INVOICE_MODEL = 'payment.Invoice'
+
 # Try and import local settings which can be used to override any of the above.
 try:
     from settings_local import *

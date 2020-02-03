@@ -4,7 +4,7 @@ from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 
-from oscar.core.compat import AUTH_USER_MODEL
+from oscar.core.compat import AUTH_USER_MODEL, INVOICE_MODEL
 from oscar.core.utils import get_default_currency
 from oscar.models.fields import AutoSlugField
 from oscar.templatetags.currency_filters import currency
@@ -74,6 +74,12 @@ class AbstractSource(models.Model):
         on_delete=models.CASCADE,
         related_name='sources',
         verbose_name=_("Order"), null=True, blank=True)
+
+    invoice = models.ForeignKey(
+        INVOICE_MODEL,
+        related_name='invoice_sources',
+        verbose_name=_("Invoice"), null=True, blank=True
+    )
     source_type = models.ForeignKey(
         'payment.SourceType',
         on_delete=models.CASCADE,
@@ -321,3 +327,10 @@ class AbstractBankcard(models.Model):
 
     def expiry_month(self, format='%m/%y'):
         return self.expiry_date.strftime(format)
+
+
+@python_2_unicode_compatible
+class AbstractInvoice(models.Model):
+
+    def __str__(self):
+        return self.pk
