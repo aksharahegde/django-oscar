@@ -78,7 +78,8 @@ class AbstractSource(models.Model):
     invoice = models.ForeignKey(
         INVOICE_MODEL,
         related_name='invoice_sources',
-        verbose_name=_("Invoice"), null=True, blank=True
+        verbose_name=_("Invoice"), null=True, blank=True,
+        on_delete=models.PROTECT
     )
     source_type = models.ForeignKey(
         'payment.SourceType',
