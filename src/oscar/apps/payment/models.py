@@ -33,7 +33,7 @@ if not is_model_registered('payment', 'Bankcard'):
     __all__.append('Bankcard')
 
 if not is_model_registered('payment', 'Invoice'):
-    class Transaction(abstract_models.AbstractInvoice):
+    class Invoice(abstract_models.AbstractInvoice):
         pass
 
     __all__.append('Invoice')
