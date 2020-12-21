@@ -30,7 +30,8 @@ class TestCatalogueViews(WebTestCase):
     def test_exist(self):
         urls = [reverse('dashboard:catalogue-product-list'),
                 reverse('dashboard:catalogue-category-list'),
-                reverse('dashboard:stock-alert-list')]
+                reverse('dashboard:stock-alert-list'),
+                reverse('dashboard:catalogue-product-lookup')]
         for url in urls:
             self.assertIsOk(self.get(url))
 
@@ -126,7 +127,7 @@ class TestAStaffUser(WebTestCase):
         form['stockrecords-0-partner'] = self.partner.id
         form['stockrecords-0-partner_sku'] = '14'
         form['stockrecords-0-num_in_stock'] = '555'
-        form['stockrecords-0-price_excl_tax'] = '13.99'
+        form['stockrecords-0-price'] = '13.99'
         page = form.submit(name='action', value='continue')
 
         self.assertEqual(Product.objects.count(), 1)

@@ -111,10 +111,10 @@ The default is::
                  'queries': [
                      # This is a list of (name, query) tuples where the name will
                      # be displayed on the front-end.
-                     (_('0 to 20'), u'[0 TO 20]'),
-                     (_('20 to 40'), u'[20 TO 40]'),
-                     (_('40 to 60'), u'[40 TO 60]'),
-                     (_('60+'), u'[60 TO *]'),
+                     (_('0 to 20'), '[0 TO 20]'),
+                     (_('20 to 40'), '[20 TO 40]'),
+                     (_('40 to 60'), '[40 TO 60]'),
+                     (_('60+'), '[60 TO *]'),
                  ]
              }),
         ]),
@@ -292,6 +292,14 @@ A URL which is passed into the templates for communication events.  It is not
 used in Oscar's default templates but could be used to include static assets
 (e.g. images) in a HTML email template.
 
+``OSCAR_SAVE_SENT_EMAILS_TO_DB``
+--------------------------------
+
+Default: ``True``
+
+Indicates if sent emails will be saved to database as instances of
+``oscar.apps.communication.models.Email``.
+
 Offer settings
 ==============
 
@@ -369,7 +377,7 @@ For example::
             'format_type': "accounting",
         },
         'EUR': {
-            'format': u'#,##0\xa0¤',
+            'format': '#,##0\xa0¤',
         }
     }
 
@@ -516,12 +524,6 @@ context. If setting is set, enables Universal Analytics tracking code for page v
 transactions.
 
 
-``OSCAR_USE_LESS``
-------------------
-
-Allows to use raw LESS styles directly. Refer to :ref:`less-css` document for more details.
-
-
 ``OSCAR_CSV_INCLUDE_BOM``
 -------------------------
 
@@ -530,3 +532,11 @@ Default: ``False``
 A flag to control whether Oscar's CSV writer should prepend a byte order mark
 (BOM) to CSV files that are encoded in UTF-8. Useful for compatibility with some
 CSV readers, Microsoft Excel in particular.
+
+
+``OSCAR_URL_SCHEMA``
+--------------------
+
+Default: ``http``
+
+The schema that will be used to build absolute url in ``absolute_url`` template tag.

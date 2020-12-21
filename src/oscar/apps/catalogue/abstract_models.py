@@ -11,9 +11,12 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.files.base import File
 from django.core.validators import RegexValidator
 from django.db import models
-from django.db.models import Count, Sum
+from django.db.models import Count, Exists, OuterRef, Sum
+from django.db.models.fields import Field
+from django.db.models.lookups import StartsWith
+from django.template.defaultfilters import striptags
 from django.urls import reverse
-from django.utils.functional import cached_property
+from django.utils.functional import SimpleLazyObject, cached_property
 from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
 from django.utils.translation import get_language
@@ -21,17 +24,50 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 from treebeard.mp_tree import MP_Node
 
-from oscar.core.loading import get_class, get_model
+from oscar.core.decorators import deprecated
+from oscar.core.loading import get_class, get_classes, get_model
 from oscar.core.utils import slugify
 from oscar.core.validators import non_python_keyword
 from oscar.models.fields import AutoSlugField, NullCharField
 from oscar.models.fields.slugfield import SlugField
 from oscar.utils.models import get_image_upload_path
 
-BrowsableProductManager = get_class('catalogue.managers', 'BrowsableProductManager')
-ProductQuerySet = get_class('catalogue.managers', 'ProductQuerySet')
+CategoryQuerySet, ProductQuerySet = get_classes(
+    'catalogue.managers', ['CategoryQuerySet', 'ProductQuerySet'])
 ProductAttributesContainer = get_class(
     'catalogue.product_attributes', 'ProductAttributesContainer')
+
+
+class ReverseStartsWith(StartsWith):
+    """
+    Adds a new lookup method to the django query language, that allows the
+    following syntax::
+
+        henk__rstartswith="koe"
+
+    The regular version of startswith::
+
+        henk__startswith="koe"
+
+     Would be about the same as the python statement::
+
+        henk.startswith("koe")
+
+    ReverseStartsWith will flip the right and left hand side of the expression,
+    effectively making this the same query as::
+
+    "koe".startswith(henk)
+    """
+    def process_rhs(self, compiler, connection):
+        return super().process_lhs(compiler, connection)
+
+    def process_lhs(self, compiler, connection, lhs=None):
+        if lhs is not None:
+            raise Exception("Flipped process_lhs does not accept lhs argument")
+        return super().process_rhs(compiler, connection)
+
+
+Field.register_lookup(ReverseStartsWith, "rstartswith")
 
 
 class AbstractProductClass(models.Model):
@@ -93,12 +129,28 @@ class AbstractCategory(MP_Node):
 
     name = models.CharField(_('Name'), max_length=255, db_index=True)
     description = models.TextField(_('Description'), blank=True)
+    meta_title = models.CharField(_('Meta title'), max_length=255, blank=True, null=True)
+    meta_description = models.TextField(_('Meta description'), blank=True, null=True)
     image = models.ImageField(_('Image'), upload_to='categories', blank=True,
                               null=True, max_length=255)
     slug = SlugField(_('Slug'), max_length=255, db_index=True)
 
+    is_public = models.BooleanField(
+        _('Is public'),
+        default=True,
+        db_index=True,
+        help_text=_("Show this category in search results and catalogue listings."))
+
+    ancestors_are_public = models.BooleanField(
+        _('Ancestor categories are public'),
+        default=True,
+        db_index=True,
+        help_text=_("The ancestors of this category are public"))
+
     _slug_separator = '/'
     _full_name_separator = ' > '
+
+    objects = CategoryQuerySet.as_manager()
 
     def __str__(self):
         return self.full_name
@@ -158,8 +210,39 @@ class AbstractCategory(MP_Node):
         """
         if not self.slug:
             self.slug = self.generate_slug()
-
         super().save(*args, **kwargs)
+
+    def set_ancestors_are_public(self):
+        # Update ancestors_are_public for the sub tree.
+        # note: This doesn't trigger a new save for each instance, rather
+        # just a SQL update.
+        included_in_non_public_subtree = self.__class__.objects.filter(
+            is_public=False, path__rstartswith=OuterRef("path"), depth__lt=OuterRef("depth")
+        )
+        self.get_descendants_and_self().update(
+            ancestors_are_public=Exists(
+                included_in_non_public_subtree.values("id"), negated=True))
+
+        # Correctly populate ancestors_are_public
+        self.refresh_from_db()
+
+    @classmethod
+    def fix_tree(cls, destructive=False):
+        super().fix_tree(destructive)
+        for node in cls.get_root_nodes():
+            # ancestors_are_public *must* be True for root nodes, or all trees
+            # will become non-public
+            if not node.ancestors_are_public:
+                node.ancestors_are_public = True
+                node.save()
+            else:
+                node.set_ancestors_are_public()
+
+    def get_meta_title(self):
+        return self.meta_title or self.name
+
+    def get_meta_description(self):
+        return self.meta_description or striptags(self.description)
 
     def get_ancestors_and_self(self):
         """
@@ -268,6 +351,7 @@ class AbstractProduct(models.Model):
     is_public = models.BooleanField(
         _('Is public'),
         default=True,
+        db_index=True,
         help_text=_("Show this product in search results and catalogue listings."))
 
     upc = NullCharField(
@@ -294,6 +378,8 @@ class AbstractProduct(models.Model):
                              max_length=255, blank=True)
     slug = models.SlugField(_('Slug'), max_length=255, unique=False)
     description = models.TextField(_('Description'), blank=True)
+    meta_title = models.CharField(_('Meta title'), max_length=255, blank=True, null=True)
+    meta_description = models.TextField(_('Meta description'), blank=True, null=True)
 
     #: "Kind" of product, e.g. T-Shirt, Book, etc.
     #: None for child products, they inherit their parent's product class
@@ -350,9 +436,6 @@ class AbstractProduct(models.Model):
             "or not"))
 
     objects = ProductQuerySet.as_manager()
-    # browsable property is deprecated and will be removed in Oscar 2.1
-    # Use Product.objects.browsable() instead.
-    browsable = BrowsableProductManager()
 
     class Meta:
         abstract = True
@@ -363,7 +446,7 @@ class AbstractProduct(models.Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.attr = ProductAttributesContainer(product=self)
+        self.attr = SimpleLazyObject(lambda: ProductAttributesContainer(product=self))
 
     def __str__(self):
         if self.title:
@@ -527,7 +610,7 @@ class AbstractProduct(models.Model):
         """
         Return a string of all of a product's attributes
         """
-        attributes = self.attribute_values.all()
+        attributes = self.get_attribute_values()
         pairs = [attribute.summary() for attribute in attributes]
         return ", ".join(pairs)
 
@@ -540,6 +623,20 @@ class AbstractProduct(models.Model):
             title = self.parent.title
         return title
     get_title.short_description = pgettext_lazy("Product title", "Title")
+
+    def get_meta_title(self):
+        title = self.meta_title
+        if not title and self.is_child:
+            title = self.parent.meta_title
+        return title or self.get_title()
+    get_meta_title.short_description = pgettext_lazy("Product meta title", "Meta title")
+
+    def get_meta_description(self):
+        meta_description = self.meta_description
+        if not meta_description and self.is_child:
+            meta_description = self.parent.meta_description
+        return meta_description or striptags(self.description)
+    get_meta_description.short_description = pgettext_lazy("Product meta description", "Meta description")
 
     def get_product_class(self):
         """
@@ -570,6 +667,16 @@ class AbstractProduct(models.Model):
         else:
             return self.categories
     get_categories.short_description = _("Categories")
+
+    def get_attribute_values(self):
+        attribute_values = self.attribute_values.all()
+        if self.is_child:
+            parent_attribute_values = self.parent.attribute_values.exclude(
+                attribute__code__in=attribute_values.values("attribute__code")
+            )
+            return attribute_values | parent_attribute_values
+
+        return attribute_values
 
     # Images
 
@@ -779,6 +886,10 @@ class AbstractProductAttribute(models.Model):
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        if self.type == self.BOOLEAN and self.required:
+            raise ValidationError(_("Boolean attribute should not be required."))
 
     def _save_file(self, value_obj, value):
         # File fields in Django are treated differently, see
@@ -1105,22 +1216,36 @@ class AbstractOption(models.Model):
     This is not the same as an 'attribute' as options do not have a fixed value
     for a particular item.  Instead, option need to be specified by a customer
     when they add the item to their basket.
-    """
-    name = models.CharField(_("Name"), max_length=128)
-    code = AutoSlugField(_("Code"), max_length=128, unique=True,
-                         populate_from='name')
 
-    REQUIRED, OPTIONAL = ('Required', 'Optional')
+    The `type` of the option determines the form input that will be used to
+    collect the information from the customer, and the `required` attribute
+    determines whether a value must be supplied in order to add the item to the basket.
+    """
+
+    # Option types
+    TEXT = "text"
+    INTEGER = "integer"
+    FLOAT = "float"
+    BOOLEAN = "boolean"
+    DATE = "date"
+
     TYPE_CHOICES = (
-        (REQUIRED, _("Required - a value for this option must be specified")),
-        (OPTIONAL, _("Optional - a value for this option can be omitted")),
+        (TEXT, _("Text")),
+        (INTEGER, _("Integer")),
+        (BOOLEAN, _("True / False")),
+        (FLOAT, _("Float")),
+        (DATE, _("Date")),
     )
-    type = models.CharField(_("Status"), max_length=128, default=REQUIRED,
-                            choices=TYPE_CHOICES)
+
+    name = models.CharField(_("Name"), max_length=128, db_index=True)
+    code = AutoSlugField(_("Code"), max_length=128, unique=True, populate_from='name')
+    type = models.CharField(_("Type"), max_length=255, default=TEXT, choices=TYPE_CHOICES)
+    required = models.BooleanField(_("Is this option required?"), default=False)
 
     class Meta:
         abstract = True
         app_label = 'catalogue'
+        ordering = ['name']
         verbose_name = _("Option")
         verbose_name_plural = _("Options")
 
@@ -1128,8 +1253,9 @@ class AbstractOption(models.Model):
         return self.name
 
     @property
+    @deprecated
     def is_required(self):
-        return self.type == self.REQUIRED
+        return self.required
 
 
 class MissingProductImage(object):

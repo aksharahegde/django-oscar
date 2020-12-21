@@ -2,8 +2,7 @@
 
 from django.apps import apps
 from django.conf import settings
-from django.conf.urls import url
-from django.urls import reverse_lazy
+from django.urls import path, reverse_lazy
 from django.views.generic.base import RedirectView
 
 from oscar.core.application import OscarConfig
@@ -33,18 +32,19 @@ class Shop(OscarConfig):
         from oscar.views.decorators import login_forbidden
 
         urls = [
-            url(r'^$', RedirectView.as_view(url=settings.OSCAR_HOMEPAGE), name='home'),
-            url(r'^catalogue/', self.catalogue_app.urls),
-            url(r'^basket/', self.basket_app.urls),
-            url(r'^checkout/', self.checkout_app.urls),
-            url(r'^accounts/', self.customer_app.urls),
-            url(r'^search/', self.search_app.urls),
-            url(r'^dashboard/', self.dashboard_app.urls),
-            url(r'^offers/', self.offer_app.urls),
+            path('', RedirectView.as_view(url=settings.OSCAR_HOMEPAGE), name='home'),
+            path('catalogue/', self.catalogue_app.urls),
+            path('basket/', self.basket_app.urls),
+            path('checkout/', self.checkout_app.urls),
+            path('accounts/', self.customer_app.urls),
+            path('search/', self.search_app.urls),
+            path('dashboard/', self.dashboard_app.urls),
+            path('offers/', self.offer_app.urls),
 
             # Password reset - as we're using Django's default view functions,
             # we can't namespace these urls as that prevents
             # the reverse function from working.
+<<<<<<< HEAD
             #url(r'^password-reset/$',
             #    login_forbidden(
             #        auth_views.PasswordResetView.as_view(

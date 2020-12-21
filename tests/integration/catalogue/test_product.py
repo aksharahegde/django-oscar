@@ -71,12 +71,6 @@ class TopLevelProductTests(ProductTests):
             product_class=self.product_class, title="Kopfhörer")
         self.assertEqual(set([product]), set(Product.objects.browsable()))
 
-    def test_top_level_products_are_part_of_browsable_deprecated(self):
-        # Test for deprecated Product.browsable.
-        product = Product.objects.create(
-            product_class=self.product_class, title="Kopfhörer")
-        self.assertEqual(set([product]), set(Product.browsable.all()))
-
 
 class ChildProductTests(ProductTests):
 
@@ -87,6 +81,16 @@ class ChildProductTests(ProductTests):
             product_class=self.product_class,
             structure=Product.PARENT,
             is_discountable=False)
+        ProductAttribute.objects.create(
+            product_class=self.product_class,
+            name='The first attribute',
+            code='first_attribute',
+            type='text')
+        ProductAttribute.objects.create(
+            product_class=self.product_class,
+            name='The second attribute',
+            code='second_attribute',
+            type='text')
 
     def test_child_products_dont_need_titles(self):
         Product.objects.create(
@@ -110,12 +114,42 @@ class ChildProductTests(ProductTests):
             structure=Product.CHILD)
         self.assertEqual(set([self.parent]), set(Product.objects.browsable()))
 
-    def test_child_products_are_not_part_of_browsable_deprecated(self):
-        # Test for deprecated Product.browsable
-        Product.objects.create(
+    def test_child_products_attribute_values(self):
+        product = Product.objects.create(
             product_class=self.product_class, parent=self.parent,
             structure=Product.CHILD)
-        self.assertEqual(set([self.parent]), set(Product.browsable.all()))
+
+        self.parent.attr.first_attribute = "klats"
+        product.attr.second_attribute = "henk"
+        self.parent.save()
+        product.save()
+
+        product = Product.objects.get(pk=product.pk)
+        parent = Product.objects.get(pk=self.parent.pk)
+
+        self.assertEqual(parent.get_attribute_values().count(), 1)
+        self.assertEqual(product.get_attribute_values().count(), 2)
+        self.assertTrue(hasattr(parent.attr, "first_attribute"))
+        self.assertFalse(hasattr(parent.attr, "second_attribute"))
+        self.assertTrue(hasattr(product.attr, "first_attribute"))
+        self.assertTrue(hasattr(product.attr, "second_attribute"))
+
+    def test_child_products_attribute_values_no_parent_values(self):
+        product = Product.objects.create(
+            product_class=self.product_class, parent=self.parent,
+            structure=Product.CHILD)
+
+        product.attr.second_attribute = "henk"
+        product.save()
+
+        product = Product.objects.get(pk=product.pk)
+
+        self.assertEqual(self.parent.get_attribute_values().count(), 0)
+        self.assertEqual(product.get_attribute_values().count(), 1)
+        self.assertFalse(hasattr(self.parent.attr, "first_attribute"))
+        self.assertFalse(hasattr(self.parent.attr, "second_attribute"))
+        self.assertFalse(hasattr(product.attr, "first_attribute"))
+        self.assertTrue(hasattr(product.attr, "second_attribute"))
 
 
 class TestAChildProduct(TestCase):

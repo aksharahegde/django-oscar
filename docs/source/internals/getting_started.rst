@@ -24,8 +24,8 @@ project:
 .. code-block:: bash
 
     $ mkvirtualenv oscar
-    $ pip install django-oscar
-    $ django-admin.py startproject frobshop
+    $ pip install django-oscar[sorl-thumbnail]
+    $ django-admin startproject frobshop
 
 If you do not have :command:`mkvirtualenv`, then replace that line with::
 
@@ -35,6 +35,12 @@ If you do not have :command:`mkvirtualenv`, then replace that line with::
 
 This will create a folder ``frobshop`` for your project. It is highly
 recommended to install Oscar in a virtualenv.
+
+.. tip::
+
+    ``sorl-thumbnail`` is an optional dependency for image thumbnail, but is what Oscar expects
+    to use by default. It can be replaced with ``easy-thumbnails`` or a custom thumbnail backend. If you want to
+    use a different backend then remember to change the ``OSCAR_THUMBNAILER`` setting to point to it.
 
 .. attention::
 
@@ -51,7 +57,7 @@ recommended to install Oscar in a virtualenv.
 Django settings
 ===============
 
-First, edit your settings file ``frobshop.frobshop.settings.py`` to import all of Oscar's default settings.
+First, edit your settings file ``frobshop/frobshop/settings.py`` to import all of Oscar's default settings.
 
 .. code-block:: django
 
@@ -64,7 +70,7 @@ Now add Oscar's context processors to the template settings, listed below:
 
     'oscar.apps.search.context_processors.search_form',
     'oscar.apps.checkout.context_processors.checkout',
-    'oscar.apps.customer.notifications.context_processors.notifications',
+    'oscar.apps.communication.notifications.context_processors.notifications',
     'oscar.core.context_processors.metadata',
 
 Next, modify ``INSTALLED_APPS`` to be a list, and add ``django.contrib.sites``,
@@ -91,6 +97,7 @@ depends on. Also set ``SITE_ID``:
         'oscar.apps.shipping.apps.ShippingConfig',
         'oscar.apps.catalogue.apps.CatalogueConfig',
         'oscar.apps.catalogue.reviews.apps.CatalogueReviewsConfig',
+        'oscar.apps.communication.apps.CommunicationConfig',
         'oscar.apps.partner.apps.PartnerConfig',
         'oscar.apps.basket.apps.BasketConfig',
         'oscar.apps.payment.apps.PaymentConfig',
@@ -118,7 +125,7 @@ depends on. Also set ``SITE_ID``:
         'widget_tweaks',
         'haystack',
         'treebeard',
-        'sorl.thumbnail',
+        'sorl.thumbnail',   # Default thumbnail backend, can be replaced
         'django_tables2',
     ]
 
@@ -170,39 +177,6 @@ files from a remote storage (e.g. Amazon S3), you must manually copy a
 
 .. _`configured correctly`: https://docs.djangoproject.com/en/stable/howto/static-files/
 .. _sandbox settings: https://github.com/django-oscar/django-oscar/blob/master/sandbox/settings.py#L102
-
-
-URLs
-====
-
-Alter your ``frobshop/urls.py`` to include Oscar's URLs. You can also include
-the Django admin for debugging purposes. But please note that Oscar makes no
-attempts at having that be a workable interface; admin integration exists
-to ease the life of developers.
-
-If you have more than one language set your Django settings for ``LANGUAGES``,
-you will also need to include Django's i18n URLs:
-
-.. code-block:: django
-
-    from django.apps import apps
-    from django.conf.urls import include, url  # < Django-2.0
-    # from django.urls import include, path  # > Django-2.0
-    from django.contrib import admin
-
-    urlpatterns = [
-        url(r'^i18n/', include('django.conf.urls.i18n')),
-        # path('i18n/', include('django.conf.urls.i18n')),  # > Django-2.0
-
-        # The Django admin is not officially supported; expect breakage.
-        # Nonetheless, it's often useful for debugging.
-
-        url(r'^admin/', admin.site.urls),
-        # path('admin/', admin.site.urls),  # > Django-2.0
-
-        url(r'^', include(apps.get_app_config('oscar').urls[0])),
-        # path('', include(apps.get_app_config('oscar').urls[0])),  # > Django-2.0
-    ]
 
 
 Search backend
@@ -258,6 +232,35 @@ Check your database settings. A quick way to get started is to use SQLite:
 
 Note that we recommend using ``ATOMIC_REQUESTS`` to tie transactions to
 requests.
+
+URLs
+====
+
+Alter your ``frobshop/urls.py`` to include Oscar's URLs. You can also include
+the Django admin for debugging purposes. But please note that Oscar makes no
+attempts at having that be a workable interface; admin integration exists
+to ease the life of developers.
+
+If you have more than one language set your Django settings for ``LANGUAGES``,
+you will also need to include Django's i18n URLs:
+
+.. code-block:: django
+
+    from django.apps import apps
+    from django.urls import include, path
+    from django.contrib import admin
+
+    urlpatterns = [
+        path('i18n/', include('django.conf.urls.i18n')),
+
+        # The Django admin is not officially supported; expect breakage.
+        # Nonetheless, it's often useful for debugging.
+
+        path('admin/', admin.site.urls),
+
+        path('', include(apps.get_app_config('oscar').urls[0])),
+    ]
+
 
 Create database
 ---------------

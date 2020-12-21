@@ -9,7 +9,8 @@ from django.utils.translation import gettext_lazy as _
 from django.views import generic
 from django_tables2 import SingleTableMixin, SingleTableView
 
-from oscar.core.loading import get_classes, get_model
+from oscar.core.decorators import deprecated
+from oscar.core.loading import get_class, get_classes, get_model
 from oscar.views.generic import ObjectLookupView
 
 (ProductForm,
@@ -53,6 +54,7 @@ ProductTable, CategoryTable, AttributeOptionGroupTable, OptionTable \
                   ('PopUpWindowCreateMixin',
                    'PopUpWindowUpdateMixin',
                    'PopUpWindowDeleteMixin'))
+PartnerProductFilterMixin = get_class('dashboard.catalogue.mixins', 'PartnerProductFilterMixin')
 Product = get_model('catalogue', 'Product')
 Category = get_model('catalogue', 'Category')
 ProductImage = get_model('catalogue', 'ProductImage')
@@ -65,6 +67,7 @@ AttributeOptionGroup = get_model('catalogue', 'AttributeOptionGroup')
 Option = get_model('catalogue', 'Option')
 
 
+@deprecated
 def filter_products(queryset, user):
     """
     Restrict the queryset to products the given user has access to.
@@ -78,7 +81,7 @@ def filter_products(queryset, user):
     return queryset.filter(stockrecords__partner__users__pk=user.pk).distinct()
 
 
-class ProductListView(SingleTableView):
+class ProductListView(PartnerProductFilterMixin, SingleTableView):
 
     """
     Dashboard view of the product list.
@@ -111,13 +114,7 @@ class ProductListView(SingleTableView):
         return table
 
     def get_table_pagination(self, table):
-        return dict(per_page=20)
-
-    def filter_queryset(self, queryset):
-        """
-        Apply any filters to restrict the products that appear on the list
-        """
-        return filter_products(queryset, self.request.user)
+        return dict(per_page=settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE)
 
     def get_queryset(self):
         """
@@ -194,7 +191,7 @@ class ProductCreateRedirectView(generic.RedirectView):
             return self.get_invalid_product_class_url()
 
 
-class ProductCreateUpdateView(generic.UpdateView):
+class ProductCreateUpdateView(PartnerProductFilterMixin, generic.UpdateView):
     """
     Dashboard view that is can both create and update products of all kinds.
     It can be used in three different ways, each of them with a unique URL
@@ -219,6 +216,9 @@ class ProductCreateUpdateView(generic.UpdateView):
     image_formset = ProductImageFormSet
     recommendations_formset = ProductRecommendationFormSet
     stockrecord_formset = StockRecordFormSet
+
+    creating = False
+    parent = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -249,7 +249,7 @@ class ProductCreateUpdateView(generic.UpdateView):
         """
         Filter products that the user doesn't have permission to update
         """
-        return filter_products(Product.objects.all(), self.request.user)
+        return self.filter_queryset(Product.objects.all())
 
     def get_object(self, queryset=None):
         """
@@ -448,7 +448,7 @@ class ProductCreateUpdateView(generic.UpdateView):
         return self.get_url_with_querystring(url)
 
 
-class ProductDeleteView(generic.DeleteView):
+class ProductDeleteView(PartnerProductFilterMixin, generic.DeleteView):
     """
     Dashboard view to delete a product. Has special logic for deleting the
     last child product.
@@ -462,7 +462,7 @@ class ProductDeleteView(generic.DeleteView):
         """
         Filter products that the user doesn't have permission to update
         """
-        return filter_products(Product.objects.all(), self.request.user)
+        return self.filter_queryset(Product.objects.all())
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -625,6 +625,9 @@ class CategoryUpdateView(CategoryListMixin, generic.UpdateView):
 
     def get_success_url(self):
         messages.info(self.request, _("Category updated successfully"))
+        action = self.request.POST.get('action')
+        if action == 'continue':
+            return reverse('dashboard:catalogue-category-update', kwargs={"pk": self.object.id})
         return super().get_success_url()
 
 
@@ -646,7 +649,7 @@ class ProductLookupView(ObjectLookupView):
     model = Product
 
     def get_queryset(self):
-        return self.model.browsable.all()
+        return self.model.objects.browsable().all()
 
     def lookup_filter(self, qs, term):
         return qs.filter(Q(title__icontains=term)

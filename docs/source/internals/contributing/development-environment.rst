@@ -38,45 +38,27 @@ As the sandbox is a vanilla Oscar site, it is what we use to build migrations
 against::
 
     $ make sandbox
-    $ sites/sandbox/manage.py schemamigration $YOURAPP --auto
+    $ sandbox/manage.py makemigrations
 
-Writing LESS/CSS
+Writing SCSS/CSS
 ----------------
 
-Oscar's CSS files are built using LESS_.  However, the sandbox defaults to
-serving CSS files directly, bypassing LESS compilation.
+Oscar's CSS files are built using SASS.
 
-.. _LESS: http://lesscss.org/
+If you want to develop the SCSS files, run::
 
-If you want to develop the LESS files, set::
+    npm run watch
 
-    OSCAR_USE_LESS = True
-
-in ``sites/sandbox/settings_local.py``.  This will include the on-the-fly
-``less`` pre-processor. That will allow you to see changes to the LESS
-files after a page reload.
+Which will watch for and compile changes to the source files into output CSS.
 
 You can manually compile static assets files by running::
 
     npm run build
 
-For this to work, you will need to ensure that the pre-processor binary
-``lessc`` is installed. Using npm_, install LESS using::
+Testing migrations
+------------------
 
-    npm install less
-
-.. warning::
-
-    If you do submit a pull request that changes the LESS files.  Please also
-    recompile the CSS files and include them in your pull request.
-
-
-.. _npm: https://www.npmjs.com/
-
-Testing migrations against MySQL and PostgreSQL
------------------------------------------------
-
-To test the migrations against MySQL and PostgreSQL you will need to set
+To test the migrations against PostgreSQL you will need to set
 up an environment with both installed and do the following:
 
 1. Change to sandbox folder and activate your virtualenv
@@ -85,5 +67,4 @@ up an environment with both installed and do the following:
 
     ./test_migrations.sh
 
-This will recreate the Oscar database in both MySQL and PostgreSQL and rebuild
-it using ``migrate``.
+This will recreate the Oscar database in PostgreSQL and rebuild it using ``migrate``.

@@ -18,13 +18,13 @@ sys.path.append(os.path.join(PROJECT_DIR, 'src'))
 from oscar import get_version  # noqa isort:skip
 
 install_requires = [
-    'django>=1.11,<2.3',
+    'django>=2.2,<3.2',
     # PIL is required for image fields, Pillow is the "friendly" PIL fork
-    'pillow>=4.0',
+    'pillow>=6.0',
     # We use the ModelFormSetView from django-extra-views for the basket page
-    'django-extra-views>=0.11,<0.12',
+    'django-extra-views>=0.13,<0.14',
     # Search support
-    'django-haystack>=2.5.0,<3.0.0',
+    'django-haystack>=3.0b1',
     # Treebeard is used for categories
     'django-treebeard>=4.3.0',
     # Babel is used for currency formatting
@@ -37,14 +37,14 @@ install_requires = [
     # Used for oscar.test.newfactories
     'factory-boy>=2.4.1,<3.0',
     # Used for automatically building larger HTML tables
-    'django-tables2>=1.19,<2.0',
+    'django-tables2>=2.3,<2.4',
     # Used for manipulating form field attributes in templates (eg: add
     # a css class)
     'django-widget-tweaks>=1.4.1',
 ]
 
-sorl_thumbnail_version = 'sorl-thumbnail>=12.4.1,<12.5'
-easy_thumbnails_version = 'easy-thumbnails==2.5'
+sorl_thumbnail_version = 'sorl-thumbnail>=12.6,<12.7'
+easy_thumbnails_version = 'easy-thumbnails>=2.7,<2.8'
 
 docs_requires = [
     'Sphinx==2.2.2',
@@ -58,14 +58,13 @@ docs_requires = [
 
 test_requires = [
     'WebTest>=2.0,<2.1',
-    'coverage>=4.5,<4.6',
-    'django-webtest==1.9.4',
-    'py>=1.4.31',
-    'psycopg2>=2.7,<2.8',
-    'pytest>=5.1,<5.2',
-    'pytest-django>=3.5,<3.6',
-    'pytest-xdist>=1.29,<1.30',
-    'tox>=3.0,<3.9',
+    'coverage>=5.0,<5.1',
+    'django-webtest>=1.9,<1.10',
+    'psycopg2-binary>=2.8,<2.9',
+    'pytest-django>=3.7,<3.8',
+    'pytest-xdist>=1.31,<1.32',
+    'tox>=3.14,<3.15',
+    'freezegun>=0.3,<0.4',
     sorl_thumbnail_version,
     easy_thumbnails_version,
 ]
@@ -99,14 +98,13 @@ setup(
         'Development Status :: 5 - Production/Stable',
         'Environment :: Web Environment',
         'Framework :: Django',
-        'Framework :: Django :: 1.11',
         'Framework :: Django :: 2.2',
+        'Framework :: Django :: 3.0',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: Unix',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Topic :: Software Development :: Libraries :: Application Frameworks']

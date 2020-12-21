@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import generic
 
+from oscar.apps.voucher.utils import get_offer_name
 from oscar.core.loading import get_class, get_model
 from oscar.core.utils import slugify
 from oscar.views import sort_queryset
@@ -113,7 +114,7 @@ class VoucherCreateView(generic.FormView):
         )
         name = form.cleaned_data['name']
         offer = ConditionalOffer.objects.create(
-            name=_("Offer for voucher '%s'") % name,
+            name=get_offer_name(name),
             offer_type=ConditionalOffer.VOUCHER,
             benefit=benefit,
             condition=condition,
@@ -170,7 +171,7 @@ class VoucherUpdateView(generic.FormView):
 
     def get_initial(self):
         voucher = self.get_voucher()
-        offer = voucher.offers.all()[0]
+        offer = voucher.offers.first()
         benefit = offer.benefit
         return {
             'name': voucher.name,
@@ -194,11 +195,12 @@ class VoucherUpdateView(generic.FormView):
         voucher.end_datetime = form.cleaned_data['end_datetime']
         voucher.save()
 
-        offer = voucher.offers.all()[0]
+        offer = voucher.offers.first()
         offer.condition.range = form.cleaned_data['benefit_range']
         offer.condition.save()
 
         offer.exclusive = form.cleaned_data['exclusive']
+        offer.name = get_offer_name(voucher.name)
         offer.save()
 
         benefit = voucher.benefit
@@ -253,7 +255,7 @@ class VoucherSetCreateView(generic.CreateView):
         )
         name = form.cleaned_data['name']
         offer = ConditionalOffer.objects.create(
-            name=_("Offer for voucher '%s'") % name,
+            name=get_offer_name(name),
             offer_type=ConditionalOffer.VOUCHER,
             benefit=benefit,
             condition=condition,
@@ -322,7 +324,7 @@ class VoucherSetUpdateView(generic.UpdateView):
             )
             name = form.cleaned_data['name']
             offer, __ = ConditionalOffer.objects.update_or_create(
-                name=_("Offer for voucher '%s'") % name,
+                name=get_offer_name(name),
                 defaults=dict(
                     offer_type=ConditionalOffer.VOUCHER,
                     benefit=benefit,

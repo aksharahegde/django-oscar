@@ -103,7 +103,7 @@ class AbstractAddress(models.Model):
         'HT': r'^[0-9]{4}$',
         'HU': r'^[0-9]{4}$',
         'ID': r'^[0-9]{5}$',
-        'IL': r'^[0-9]{7}$',
+        'IL': r'^([0-9]{5}|[0-9]{7})$',
         'IM': r'^IM[0-9]{2,3}[A-Z]{2}$$',
         'IN': r'^[0-9]{6}$',
         'IO': r'^[A-Z]{4}[0-9][A-Z]{2}$',
@@ -490,10 +490,7 @@ class AbstractShippingAddress(AbstractAddress):
         """
         Return the order linked to this shipping address
         """
-        try:
-            return self.order_set.all()[0]
-        except IndexError:
-            return None
+        return self.order_set.first()
 
 
 class AbstractUserAddress(AbstractShippingAddress):
@@ -594,10 +591,7 @@ class AbstractBillingAddress(AbstractAddress):
         """
         Return the order linked to this shipping address
         """
-        try:
-            return self.order_set.all()[0]
-        except IndexError:
-            return None
+        return self.order_set.first()
 
 
 class AbstractPartnerAddress(AbstractAddress):

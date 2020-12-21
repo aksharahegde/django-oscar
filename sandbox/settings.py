@@ -38,8 +38,6 @@ CACHES = {
 # although not all choices may be available on all operating systems.
 # On Unix systems, a value of None will cause Django to use the same
 # timezone as the operating system.
-# If running in a Windows environment this must be set to the same as your
-# system time zone.
 USE_TZ = True
 TIME_ZONE = 'Europe/London'
 
@@ -131,7 +129,7 @@ TEMPLATES = [
 
                 # Oscar specific
                 'oscar.apps.search.context_processors.search_form',
-                'oscar.apps.customer.notifications.context_processors.notifications',
+                'oscar.apps.communication.notifications.context_processors.notifications',
                 'oscar.apps.checkout.context_processors.checkout',
                 'oscar.core.context_processors.metadata',
             ],
@@ -264,6 +262,7 @@ INSTALLED_APPS = [
     'oscar.apps.shipping.apps.ShippingConfig',
     'oscar.apps.catalogue.apps.CatalogueConfig',
     'oscar.apps.catalogue.reviews.apps.CatalogueReviewsConfig',
+    'oscar.apps.communication.apps.CommunicationConfig',
     'oscar.apps.partner.apps.PartnerConfig',
     'oscar.apps.basket.apps.BasketConfig',
     'oscar.apps.payment.apps.PaymentConfig',
@@ -301,9 +300,6 @@ INSTALLED_APPS = [
     # 3rd-party apps that the sandbox depends on
     'django_extensions',
     'debug_toolbar',
-
-    # For allowing dashboard access
-    'apps.gateway',
 ]
 
 # Add Oscar's custom auth backend so users can sign in using their email
@@ -398,14 +394,6 @@ OSCAR_ORDER_STATUS_CASCADE = {
     'Cancelled': 'Cancelled',
     'Complete': 'Shipped',
 }
-
-# LESS/CSS
-# ========
-
-# We default to using CSS files, rather than the LESS files that generate them.
-# If you want to develop Oscar's CSS, then set OSCAR_USE_LESS=True to enable the
-# on-the-fly less processor.
-OSCAR_USE_LESS = False
 
 # Sorl
 # ====

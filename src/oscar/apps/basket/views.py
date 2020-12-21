@@ -1,11 +1,10 @@
 from django import shortcuts
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import JsonResponse
+from django.http import JsonResponse, QueryDict
 from django.shortcuts import redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.http import is_safe_url
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, View
 from extra_views import ModelFormSetView
@@ -13,6 +12,7 @@ from extra_views import ModelFormSetView
 from oscar.apps.basket.signals import (
     basket_addition, voucher_addition, voucher_removal)
 from oscar.core import ajax
+from oscar.core.compat import url_has_allowed_host_and_scheme
 from oscar.core.loading import get_class, get_classes, get_model
 from oscar.core.utils import redirect_to_referrer, safe_referrer
 
@@ -27,6 +27,7 @@ Repository = get_class('shipping.repository', 'Repository')
 OrderTotalCalculator = get_class(
     'checkout.calculators', 'OrderTotalCalculator')
 BasketMessageGenerator = get_class('basket.utils', 'BasketMessageGenerator')
+SurchargeApplicator = get_class("checkout.applicator", "SurchargeApplicator")
 
 
 class BasketView(ModelFormSetView):
@@ -115,9 +116,6 @@ class BasketView(ModelFormSetView):
         if method.is_discounted:
             excl_discount = method.calculate_excl_discount(self.request.basket)
             context['shipping_charge_excl_discount'] = excl_discount
-
-        context['order_total'] = OrderTotalCalculator().calculate(
-            self.request.basket, shipping_charge)
         context['basket_warnings'] = self.get_basket_warnings(
             self.request.basket)
         context['upsell_messages'] = self.get_upsell_messages(
@@ -138,6 +136,13 @@ class BasketView(ModelFormSetView):
                                                queryset=saved_queryset,
                                                prefix='saved')
                     context['saved_formset'] = formset
+
+        surcharges = SurchargeApplicator(self.request, context).get_applicable_surcharges(
+            self.request.basket, shipping_charge=shipping_charge
+        )
+        context['surcharges'] = surcharges
+        context['order_total'] = OrderTotalCalculator().calculate(
+            self.request.basket, shipping_charge, surcharges=surcharges)
         return context
 
     def get_success_url(self):
@@ -229,9 +234,17 @@ class BasketView(ModelFormSetView):
         saved_basket.merge_line(line)
 
     def formset_invalid(self, formset):
+        has_deletion = any(formset._should_delete_form(form) for form in formset.forms)
+        has_no_invalid_non_deletion = all(form.is_valid() or formset._should_delete_form(form)
+                                          for form in formset.forms)
+        if has_deletion:
+            self.remove_deleted_forms(formset)
+            if has_no_invalid_non_deletion:
+                return self.formset_valid(formset)
+
         flash_messages = ajax.FlashMessages()
         flash_messages.warning(_(
-            "Your basket couldn't be updated. "
+            "Your basket has got some issues. "
             "Please correct any validation errors below."))
 
         if self.request.is_ajax():
@@ -241,6 +254,53 @@ class BasketView(ModelFormSetView):
 
         flash_messages.apply_to_request(self.request)
         return super().formset_invalid(formset)
+
+    def remove_deleted_forms(self, formset):
+        """
+        Removes forms marked for deletion, from the formset, as well as deletes
+        their model instance objects; and modifies the formset's request data,
+        to match the state of the data in the database, for the remaining forms.
+
+        This is useful for redisplaying a formset containing other invalid
+        forms, after deleting one of the forms from it.
+        """
+        form_data = {}
+        form_index = 0
+        for form in formset.forms:
+            # Delete forms marked for deletion, and retain the request data
+            # for the other forms
+            if formset._should_delete_form(form):
+                if form.instance.id is not None:
+                    form.instance.delete()
+            else:
+                old_form_prefix = form.prefix
+                new_form_prefix = formset.add_prefix(form_index)
+                for field_name in form.fields:
+                    form.prefix = old_form_prefix
+                    old_prefixed_field_name = form.add_prefix(field_name)
+                    form.prefix = new_form_prefix
+                    new_prefixed_field_name = form.add_prefix(field_name)
+                    try:
+                        form_data[new_prefixed_field_name] = formset.data[old_prefixed_field_name]
+                    except KeyError:
+                        pass
+                form_index += 1
+        for field_name in formset.management_form.fields:
+            prefixed_field_name = formset.management_form.add_prefix(field_name)
+            if field_name in ['INITIAL_FORMS', 'TOTAL_FORMS']:
+                form_data[prefixed_field_name] = str(form_index)
+            else:
+                form_data[prefixed_field_name] = formset.data[prefixed_field_name]
+
+        query_dict = QueryDict(mutable=True)
+        query_dict.update(form_data)
+        formset.data = query_dict
+        # Clear cached values, so that they are recomputed using the modified
+        # request data
+        del formset.management_form
+        del formset.forms
+        # Clean the formset's modified request data
+        formset.full_clean()
 
 
 class BasketAddView(FormView):
@@ -302,7 +362,7 @@ class BasketAddView(FormView):
 
     def get_success_url(self):
         post_url = self.request.POST.get('next')
-        if post_url and is_safe_url(post_url, self.request.get_host()):
+        if post_url and url_has_allowed_host_and_scheme(post_url, self.request.get_host()):
             return post_url
         return safe_referrer(self.request, 'basket:summary')
 

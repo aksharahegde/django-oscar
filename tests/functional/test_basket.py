@@ -3,8 +3,7 @@ from decimal import Decimal as D
 from http import client as http_client
 from http.cookies import _unquote
 
-from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.translation import gettext
 
@@ -64,7 +63,7 @@ class AnonAddToBasketViewTests(WebTestCase):
         basket = Basket.objects.get(id=basket_id)
         line = basket.lines.get(product=self.product)
         stockrecord = self.product.stockrecords.all()[0]
-        self.assertEqual(stockrecord.price_excl_tax, line.price_excl_tax)
+        self.assertEqual(stockrecord.price, line.price_excl_tax)
 
 
 class BasketSummaryViewTests(WebTestCase):
@@ -93,13 +92,7 @@ class BasketSummaryViewTests(WebTestCase):
 class BasketThresholdTest(WebTestCase):
     csrf_checks = False
 
-    def setUp(self):
-        self._old_threshold = settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD
-        settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD = 3
-
-    def tearDown(self):
-        settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD = self._old_threshold
-
+    @override_settings(OSCAR_MAX_BASKET_QUANTITY_THRESHOLD=3)
     def test_adding_more_than_threshold_raises(self):
         dummy_product = create_product(price=D('10.00'), num_in_stock=10)
         url = reverse('basket:add', kwargs={'pk': dummy_product.pk})
@@ -107,7 +100,7 @@ class BasketThresholdTest(WebTestCase):
                        'action': 'add',
                        'quantity': 2}
         response = self.app.post(url, params=post_params)
-        self.assertTrue('oscar_open_basket' in response.test_app.cookies)
+        self.assertIn('oscar_open_basket', response.test_app.cookies)
         post_params = {'product_id': dummy_product.id,
                        'action': 'add',
                        'quantity': 2}
@@ -118,7 +111,7 @@ class BasketThresholdTest(WebTestCase):
             "than %(threshold)d items in one order. Your basket currently "
             "has %(basket)d items."
         ) % ({'threshold': 3, 'basket': 2})
-        self.assertTrue(expected in response.test_app.cookies['messages'])
+        self.assertIn(expected, response.test_app.cookies['messages'])
 
 
 class BasketReportTests(TestCase):
@@ -318,6 +311,7 @@ class BasketFormSetTests(WebTestCase):
         management_form = formset.management_form
         data = {
             formset.add_prefix('INITIAL_FORMS'): management_form.initial['INITIAL_FORMS'],
+            formset.add_prefix('MIN_NUM_FORMS'): management_form.initial['MIN_NUM_FORMS'],
             formset.add_prefix('MAX_NUM_FORMS'): management_form.initial['MAX_NUM_FORMS'],
             formset.add_prefix('TOTAL_FORMS'): management_form.initial['TOTAL_FORMS'],
             'form-0-quantity': 1,
@@ -330,7 +324,151 @@ class BasketFormSetTests(WebTestCase):
         response = self.post(reverse('basket:summary'), params=data)
         self.assertEqual(response.status_code, 200)
         formset = response.context['formset']
-        self.assertEqual(len(formset.forms), 3)
+        self.assertEqual(len(formset.forms), 2)
         self.assertEqual(len(formset.forms_with_instances), 2)
         self.assertEqual(basket.lines.all()[0].quantity, 1)
         self.assertEqual(basket.lines.all()[1].quantity, 1)
+
+    def test_deleting_valid_line_with_other_valid_line(self):
+        product_1 = create_product()
+        product_2 = create_product()
+
+        basket = factories.create_basket(empty=True)
+        basket.owner = self.user
+        basket.save()
+        add_product(basket, product=product_1)
+        add_product(basket, product=product_2)
+
+        response = self.get(reverse('basket:summary'))
+        formset = response.context['formset']
+        self.assertEqual(len(formset.forms), 2)
+
+        data = {
+            formset.add_prefix('TOTAL_FORMS'): formset.management_form.initial['TOTAL_FORMS'],
+            formset.add_prefix('INITIAL_FORMS'): formset.management_form.initial['INITIAL_FORMS'],
+            formset.add_prefix('MIN_NUM_FORMS'): formset.management_form.initial['MIN_NUM_FORMS'],
+            formset.add_prefix('MAX_NUM_FORMS'): formset.management_form.initial['MAX_NUM_FORMS'],
+            formset.forms[0].add_prefix('id'): formset.forms[0].instance.pk,
+            formset.forms[0].add_prefix('quantity'): formset.forms[0].instance.quantity,
+            formset.forms[0].add_prefix('DELETE'): 'on',
+            formset.forms[1].add_prefix('id'): formset.forms[1].instance.pk,
+            formset.forms[1].add_prefix('quantity'): formset.forms[1].instance.quantity,
+        }
+        response = self.post(reverse('basket:summary'), params=data, xhr=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['formset'].forms), 1)
+        self.assertFalse(response.context['formset'].is_bound)  # new formset is rendered
+        self.assertEqual(basket.lines.count(), 1)
+        self.assertEqual(basket.lines.all()[0].quantity, 1)
+
+    def test_deleting_valid_line_with_other_invalid_line(self):
+        product_1 = create_product()
+        product_2 = create_product()
+
+        basket = factories.create_basket(empty=True)
+        basket.owner = self.user
+        basket.save()
+        add_product(basket, product=product_1)
+        add_product(basket, product=product_2)
+
+        response = self.get(reverse('basket:summary'))
+        formset = response.context['formset']
+        self.assertEqual(len(formset.forms), 2)
+
+        # Render product for other line out of stock
+        product_2.stockrecords.update(num_in_stock=0)
+
+        data = {
+            formset.add_prefix('TOTAL_FORMS'): formset.management_form.initial['TOTAL_FORMS'],
+            formset.add_prefix('INITIAL_FORMS'): formset.management_form.initial['INITIAL_FORMS'],
+            formset.add_prefix('MIN_NUM_FORMS'): formset.management_form.initial['MIN_NUM_FORMS'],
+            formset.add_prefix('MAX_NUM_FORMS'): formset.management_form.initial['MAX_NUM_FORMS'],
+            formset.forms[0].add_prefix('id'): formset.forms[0].instance.pk,
+            formset.forms[0].add_prefix('quantity'): formset.forms[0].instance.quantity,
+            formset.forms[0].add_prefix('DELETE'): 'on',
+            formset.forms[1].add_prefix('id'): formset.forms[1].instance.pk,
+            formset.forms[1].add_prefix('quantity'): formset.forms[1].instance.quantity,
+        }
+        response = self.post(reverse('basket:summary'), params=data, xhr=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['formset'].forms), 1)
+        self.assertTrue(response.context['formset'].is_bound)  # formset with errors is rendered
+        self.assertFalse(response.context['formset'].forms[0].is_valid())
+        self.assertEqual(basket.lines.count(), 1)
+        self.assertEqual(basket.lines.all()[0].quantity, 1)
+
+    def test_deleting_invalid_line_with_other_valid_line(self):
+        product_1 = create_product()
+        product_2 = create_product()
+
+        basket = factories.create_basket(empty=True)
+        basket.owner = self.user
+        basket.save()
+        add_product(basket, product=product_1)
+        add_product(basket, product=product_2)
+
+        response = self.get(reverse('basket:summary'))
+        formset = response.context['formset']
+        self.assertEqual(len(formset.forms), 2)
+
+        # Render product for to-be-deleted line out of stock
+        product_1.stockrecords.update(num_in_stock=0)
+
+        data = {
+            formset.add_prefix('TOTAL_FORMS'): formset.management_form.initial['TOTAL_FORMS'],
+            formset.add_prefix('INITIAL_FORMS'): formset.management_form.initial['INITIAL_FORMS'],
+            formset.add_prefix('MIN_NUM_FORMS'): formset.management_form.initial['MIN_NUM_FORMS'],
+            formset.add_prefix('MAX_NUM_FORMS'): formset.management_form.initial['MAX_NUM_FORMS'],
+            formset.forms[0].add_prefix('id'): formset.forms[0].instance.pk,
+            formset.forms[0].add_prefix('quantity'): formset.forms[0].instance.quantity,
+            formset.forms[0].add_prefix('DELETE'): 'on',
+            formset.forms[1].add_prefix('id'): formset.forms[1].instance.pk,
+            formset.forms[1].add_prefix('quantity'): formset.forms[1].instance.quantity,
+        }
+        response = self.post(reverse('basket:summary'), params=data, xhr=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['formset'].forms), 1)
+        self.assertFalse(response.context['formset'].is_bound)  # new formset is rendered
+        self.assertEqual(basket.lines.count(), 1)
+        self.assertEqual(basket.lines.all()[0].quantity, 1)
+
+    def test_deleting_invalid_line_with_other_invalid_line(self):
+        product_1 = create_product()
+        product_2 = create_product()
+
+        basket = factories.create_basket(empty=True)
+        basket.owner = self.user
+        basket.save()
+        add_product(basket, product=product_1)
+        add_product(basket, product=product_2)
+
+        response = self.get(reverse('basket:summary'))
+        formset = response.context['formset']
+        self.assertEqual(len(formset.forms), 2)
+
+        # Render products for both lines out of stock
+        product_1.stockrecords.update(num_in_stock=0)
+        product_2.stockrecords.update(num_in_stock=0)
+
+        data = {
+            formset.add_prefix('TOTAL_FORMS'): formset.management_form.initial['TOTAL_FORMS'],
+            formset.add_prefix('INITIAL_FORMS'): formset.management_form.initial['INITIAL_FORMS'],
+            formset.add_prefix('MIN_NUM_FORMS'): formset.management_form.initial['MIN_NUM_FORMS'],
+            formset.add_prefix('MAX_NUM_FORMS'): formset.management_form.initial['MAX_NUM_FORMS'],
+            formset.forms[0].add_prefix('id'): formset.forms[0].instance.pk,
+            formset.forms[0].add_prefix('quantity'): formset.forms[0].instance.quantity,
+            formset.forms[0].add_prefix('DELETE'): 'on',
+            formset.forms[1].add_prefix('id'): formset.forms[1].instance.pk,
+            formset.forms[1].add_prefix('quantity'): formset.forms[1].instance.quantity,
+        }
+        response = self.post(reverse('basket:summary'), params=data, xhr=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['formset'].forms), 1)
+        self.assertTrue(response.context['formset'].is_bound)  # formset with errors is rendered
+        self.assertFalse(response.context['formset'].forms[0].is_valid())
+        self.assertEqual(basket.lines.count(), 1)
+        self.assertEqual(basket.lines.all()[0].quantity, 1)

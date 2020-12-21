@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ungettext_lazy
+from django.utils.translation import ngettext_lazy
 from django_tables2 import A, Column, LinkColumn, TemplateColumn
 
 from oscar.core.loading import get_class, get_model
@@ -40,13 +40,13 @@ class ProductTable(DashboardTable):
         template_name='oscar/dashboard/catalogue/product_row_actions.html',
         orderable=False)
 
-    icon = "sitemap"
+    icon = 'fas fa-sitemap'
 
     class Meta(DashboardTable.Meta):
         model = Product
-        fields = ('upc', 'date_updated')
+        fields = ('upc', 'is_public', 'date_updated')
         sequence = ('title', 'upc', 'image', 'product_class', 'variants',
-                    'stock_records', '...', 'date_updated', 'actions')
+                    'stock_records', '...', 'is_public', 'date_updated', 'actions')
         order_by = '-date_updated'
 
 
@@ -67,11 +67,12 @@ class CategoryTable(DashboardTable):
         orderable=False)
 
     icon = "sitemap"
-    caption = ungettext_lazy("%s Category", "%s Categories")
+    caption = ngettext_lazy("%s Category", "%s Categories")
 
     class Meta(DashboardTable.Meta):
         model = Category
-        fields = ('name', 'description')
+        fields = ('name', 'description', 'is_public')
+        sequence = ('name', 'description', '...', 'is_public', 'actions')
 
 
 class AttributeOptionGroupTable(DashboardTable):
@@ -89,7 +90,7 @@ class AttributeOptionGroupTable(DashboardTable):
         orderable=False)
 
     icon = "sitemap"
-    caption = ungettext_lazy("%s Attribute Option Group", "%s Attribute Option Groups")
+    caption = ngettext_lazy("%s Attribute Option Group", "%s Attribute Option Groups")
 
     class Meta(DashboardTable.Meta):
         model = AttributeOptionGroup
@@ -109,10 +110,10 @@ class OptionTable(DashboardTable):
         orderable=False)
 
     icon = "reorder"
-    caption = ungettext_lazy("%s Option", "%s Options")
+    caption = ngettext_lazy("%s Option", "%s Options")
 
     class Meta(DashboardTable.Meta):
         model = Option
-        fields = ('name', 'type')
-        sequence = ('name', 'type', 'actions')
+        fields = ('name', 'type', 'required')
+        sequence = ('name', 'type', 'required', 'actions')
         per_page = settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE

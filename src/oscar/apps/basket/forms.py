@@ -9,10 +9,32 @@ from oscar.forms import widgets
 
 Line = get_model('basket', 'line')
 Basket = get_model('basket', 'basket')
+Option = get_model('catalogue', 'option')
 Product = get_model('catalogue', 'product')
 
 
+def _option_text_field(option):
+    return forms.CharField(label=option.name, required=option.required)
+
+
+def _option_integer_field(option):
+    return forms.IntegerField(label=option.name, required=option.required)
+
+
+def _option_boolean_field(option):
+    return forms.BooleanField(label=option.name, required=option.required)
+
+
+def _option_float_field(option):
+    return forms.FloatField(label=option.name, required=option.required)
+
+
+def _option_date_field(option):
+    return forms.DateField(label=option.name, required=option.required, widget=forms.widgets.DateInput)
+
+
 class BasketLineForm(forms.ModelForm):
+
     save_for_later = forms.BooleanField(
         initial=False, required=False, label=_('Save for Later'))
 
@@ -120,6 +142,15 @@ class BasketVoucherForm(forms.Form):
 
 
 class AddToBasketForm(forms.Form):
+
+    OPTION_FIELD_FACTORIES = {
+        Option.TEXT: _option_text_field,
+        Option.INTEGER: _option_integer_field,
+        Option.BOOLEAN: _option_boolean_field,
+        Option.FLOAT: _option_float_field,
+        Option.DATE: _option_date_field,
+    }
+
     quantity = forms.IntegerField(initial=1, min_value=1, label=_('Quantity'))
 
     def __init__(self, basket, product, *args, **kwargs):
@@ -148,7 +179,7 @@ class AddToBasketForm(forms.Form):
         """
         choices = []
         disabled_values = []
-        for child in product.children.all():
+        for child in product.children.public():
             # Build a description of the child, including any pertinent
             # attributes
             attr_summary = child.attribute_summary
@@ -182,8 +213,8 @@ class AddToBasketForm(forms.Form):
         This is designed to be overridden so that specific widgets can be used
         for certain types of options.
         """
-        self.fields[option.code] = forms.CharField(
-            label=option.name, required=option.is_required)
+        option_field = self.OPTION_FIELD_FACTORIES.get(option.type, Option.TEXT)(option)
+        self.fields[option.code] = option_field
 
     # Cleaning
 
@@ -268,17 +299,22 @@ class AddToBasketForm(forms.Form):
         return options
 
 
-class SimpleAddToBasketForm(AddToBasketForm):
-    """
-    Simplified version of the add to basket form where the quantity is
-    defaulted to 1 and rendered in a hidden widget
-
-    Most of the time, you won't need to override this class. Just change
-    AddToBasketForm to change behaviour in both forms at once.
-    """
-
+class SimpleAddToBasketMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if 'quantity' in self.fields:
             self.fields['quantity'].initial = 1
             self.fields['quantity'].widget = forms.HiddenInput()
+
+
+class SimpleAddToBasketForm(SimpleAddToBasketMixin, AddToBasketForm):
+    """
+    Simplified version of the add to basket form where the quantity is
+    defaulted to 1 and rendered in a hidden widget
+
+    If you changed `AddToBasketForm`, you'll need to override this class
+    as well by doing:
+
+    class SimpleAddToBasketForm(SimpleAddToBasketMixin, AddToBasketForm):
+        pass
+    """

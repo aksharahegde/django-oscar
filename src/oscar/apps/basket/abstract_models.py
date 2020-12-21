@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db import models
 from django.db.models import Sum
-from django.utils.encoding import smart_text
+from django.utils.encoding import smart_str
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
 
@@ -599,11 +599,10 @@ class AbstractLine(models.Model):
            another one, and new items are added to the top as well.  Amazon
            mostly does this, but doesn't change the position when you update
            the quantity in the basket view.
-           To get this behaviour, add a date_updated field, change
-           Meta.ordering and optionally do something similar on wishlist lines.
-           Order lines should already be created in the order of the basket
-           lines, and are sorted by their primary key, so no changes should be
-           necessary there.
+           To get this behaviour, change Meta.ordering and optionally do
+           something similar on wishlist lines. Order lines should already
+           be created in the order of the basket lines, and are sorted by
+           their primary key, so no changes should be necessary there.
 
     """
     basket = models.ForeignKey(
@@ -646,6 +645,7 @@ class AbstractLine(models.Model):
 
     # Track date of first addition
     date_created = models.DateTimeField(_("Date Created"), auto_now_add=True, db_index=True)
+    date_updated = models.DateTimeField(_("Date Updated"), auto_now=True, db_index=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -714,7 +714,7 @@ class AbstractLine(models.Model):
 
         Consumed items are no longer available to be used in offers.
         """
-        self.consumer.consume(quantity, offer=offer)
+        return self.consumer.consume(quantity, offer=offer)
 
     def get_price_breakdown(self):
         """
@@ -771,6 +771,9 @@ class AbstractLine(models.Model):
 
     def is_available_for_offer_discount(self, offer):
         return self.consumer.available(offer) > 0
+
+    def quantity_available_for_offer(self, offer):
+        return self.quantity_without_offer_discount(offer) + self.quantity_with_offer_discount(offer)
 
     # ==========
     # Properties
@@ -875,7 +878,7 @@ class AbstractLine(models.Model):
 
     @property
     def description(self):
-        d = smart_text(self.product)
+        d = smart_str(self.product)
         ops = []
         for attribute in self.attributes.all():
             ops.append("%s = '%s'" % (attribute.option.name, attribute.value))
@@ -903,8 +906,8 @@ class AbstractLine(models.Model):
         if current_price_incl_tax != self.price_incl_tax:
             product_prices = {
                 'product': self.product.get_title(),
-                'old_price': currency(self.price_incl_tax),
-                'new_price': currency(current_price_incl_tax)
+                'old_price': currency(self.price_incl_tax, self.price_currency),
+                'new_price': currency(current_price_incl_tax, self.price_currency)
             }
             if current_price_incl_tax > self.price_incl_tax:
                 warning = _("The price of '%(product)s' has increased from"

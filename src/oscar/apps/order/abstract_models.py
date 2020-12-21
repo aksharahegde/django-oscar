@@ -1,11 +1,8 @@
-import hashlib
 import logging
-import warnings
 from collections import OrderedDict
 from decimal import Decimal as D
 
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 from django.core.signing import BadSignature, Signer
 from django.db import models
 from django.db.models import Sum
@@ -21,7 +18,6 @@ from oscar.core.compat import AUTH_USER_MODEL
 from oscar.core.loading import get_model
 from oscar.core.utils import get_default_currency
 from oscar.models.fields import AutoSlugField
-from oscar.utils.deprecation import RemovedInOscar21Warning
 
 from . import exceptions
 
@@ -170,34 +166,30 @@ class AbstractOrder(models.Model):
         """
         Return basket total including tax but before discounts are applied
         """
-        total = D('0.00')
-        for line in self.lines.all():
-            total += line.line_price_before_discounts_incl_tax
-        return total
+        result = self.lines.aggregate(total=Sum('line_price_before_discounts_incl_tax'))
+        return result['total']
 
     @property
     def basket_total_before_discounts_excl_tax(self):
         """
         Return basket total excluding tax but before discounts are applied
         """
-        total = D('0.00')
-        for line in self.lines.all():
-            total += line.line_price_before_discounts_excl_tax
-        return total
+        result = self.lines.aggregate(total=Sum('line_price_before_discounts_excl_tax'))
+        return result['total']
 
     @property
     def basket_total_incl_tax(self):
         """
         Return basket total including tax
         """
-        return self.total_incl_tax - self.shipping_incl_tax
+        return self.total_incl_tax - self.shipping_incl_tax - self.surcharge_incl_tax
 
     @property
     def basket_total_excl_tax(self):
         """
         Return basket total excluding tax
         """
-        return self.total_excl_tax - self.shipping_excl_tax
+        return self.total_excl_tax - self.shipping_excl_tax - self.surcharge_excl_tax
 
     @property
     def total_before_discounts_incl_tax(self):
@@ -229,6 +221,14 @@ class AbstractOrder(models.Model):
     @property
     def total_tax(self):
         return self.total_incl_tax - self.total_excl_tax
+
+    @property
+    def surcharge_excl_tax(self):
+        return sum(charge.excl_tax for charge in self.surcharges.all())
+
+    @property
+    def surcharge_incl_tax(self):
+        return sum(charge.incl_tax for charge in self.surcharges.all())
 
     @property
     def num_lines(self):
@@ -314,38 +314,11 @@ class AbstractOrder(models.Model):
         signer = Signer(salt='oscar.apps.order.Order')
         return signer.sign(self.number)
 
-    def check_deprecated_verification_hash(self, hash_to_check):
-        """
-        Backward compatible check for MD5 hashes that were generated in
-        Oscar 1.5 and lower.
-
-        This must explicitly be enabled by setting OSCAR_DEPRECATED_ORDER_VERIFY_KEY,
-        which must not be equal to SECRET_KEY - i.e., the project must
-        have changed its SECRET_KEY since this change was applied.
-        """
-        old_verification_key = getattr(settings, 'OSCAR_DEPRECATED_ORDER_VERIFY_KEY', None)
-        if old_verification_key is None:
-            return False
-
-        warnings.warn('Use of OSCAR_DEPRECATED_ORDER_VERIFY_KEY is deprecated', RemovedInOscar21Warning, stacklevel=2)
-
-        if old_verification_key == settings.SECRET_KEY:
-            raise ImproperlyConfigured(
-                'OSCAR_DEPRECATED_ORDER_VERIFY_KEY cannot be equal to SECRET_KEY')
-
-        logger.warning('Using insecure md5 hashing for order URL hash verification.')
-        string_to_hash = '%s%s' % (self.number, old_verification_key)
-        order_hash = hashlib.md5(string_to_hash.encode('utf8')).hexdigest()
-        return constant_time_compare(order_hash, hash_to_check)
-
     def check_verification_hash(self, hash_to_check):
         """
         Checks the received verification hash against this order number.
         Returns False if the verification failed, True otherwise.
         """
-        if self.check_deprecated_verification_hash(hash_to_check):
-            return True
-
         signer = Signer(salt='oscar.apps.order.Order')
         try:
             signed_number = signer.unsign(hash_to_check)
@@ -424,6 +397,7 @@ class AbstractOrderNote(models.Model):
     class Meta:
         abstract = True
         app_label = 'order'
+        ordering = ['-date_updated']
         verbose_name = _("Order Note")
         verbose_name_plural = _("Order Notes")
 
@@ -456,9 +430,8 @@ class AbstractOrderStatusChange(models.Model):
         ordering = ['-date_created']
 
     def __str__(self):
-        return _('{order} has changed status from {old_status} to {new_status}').format(
-            order=self.order, old_status=self.old_status, new_status=self.new_status
-        )
+        return _("%(order)s has changed status from %(old_status)s to %(new_status)s") \
+            % {'order': self.order, 'old_status': self.old_status, 'new_status': self.new_status, }
 
 
 class AbstractCommunicationEvent(models.Model):
@@ -472,7 +445,7 @@ class AbstractCommunicationEvent(models.Model):
         related_name="communication_events",
         verbose_name=_("Order"))
     event_type = models.ForeignKey(
-        'customer.CommunicationEventType',
+        'communication.CommunicationEventType',
         on_delete=models.CASCADE,
         verbose_name=_("Event Type"))
     date_created = models.DateTimeField(_("Date"), auto_now_add=True, db_index=True)
@@ -567,10 +540,6 @@ class AbstractLine(models.Model):
         _("Price before discounts (excl. tax)"),
         decimal_places=2, max_digits=12)
 
-    # Deprecated - will be removed in Oscar 2.1
-    unit_cost_price = models.DecimalField(
-        _("Unit Cost Price"), decimal_places=2, max_digits=12, blank=True,
-        null=True)
     # Normal site price for item (without discounts)
     unit_price_incl_tax = models.DecimalField(
         _("Unit Price (inc. tax)"), decimal_places=2, max_digits=12,
@@ -578,18 +547,10 @@ class AbstractLine(models.Model):
     unit_price_excl_tax = models.DecimalField(
         _("Unit Price (excl. tax)"), decimal_places=2, max_digits=12,
         blank=True, null=True)
-    # Deprecated - will be removed in Oscar 2.1
-    unit_retail_price = models.DecimalField(
-        _("Unit Retail Price"), decimal_places=2, max_digits=12,
-        blank=True, null=True)
 
     # Partners often want to assign some status to each line to help with their
     # own business processes.
     status = models.CharField(_("Status"), max_length=255, blank=True)
-
-    # Deprecated - will be removed in Oscar 2.1
-    est_dispatch_date = models.DateField(
-        _("Estimated Dispatch Date"), blank=True, null=True)
 
     #: Order status pipeline.  This should be a dict where each (key, value)
     #: corresponds to a status and the possible statuses that can follow that
@@ -1160,6 +1121,7 @@ class AbstractOrderDiscount(models.Model):
     class Meta:
         abstract = True
         app_label = 'order'
+        ordering = ['pk']
         verbose_name = _("Order Discount")
         verbose_name_plural = _("Order Discounts")
 
@@ -1200,3 +1162,36 @@ class AbstractOrderDiscount(models.Model):
         if self.voucher_code:
             return self.voucher_code
         return self.offer_name or ""
+
+
+class AbstractSurcharge(models.Model):
+    order = models.ForeignKey(
+        'order.Order',
+        on_delete=models.CASCADE,
+        related_name="surcharges",
+        verbose_name=_("Surcharges"))
+
+    name = models.CharField(
+        _("Surcharge"), max_length=128
+    )
+
+    code = models.CharField(
+        _("Surcharge code"), max_length=128
+    )
+
+    incl_tax = models.DecimalField(
+        _("Surcharge (inc. tax)"), decimal_places=2, max_digits=12,
+        default=0)
+
+    excl_tax = models.DecimalField(
+        _("Surcharge (excl. tax)"), decimal_places=2, max_digits=12,
+        default=0)
+
+    @property
+    def tax(self):
+        return self.incl_tax - self.excl_tax
+
+    class Meta:
+        abstract = True
+        app_label = 'order'
+        ordering = ['pk']
