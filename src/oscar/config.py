@@ -44,7 +44,6 @@ class Shop(OscarConfig):
             # Password reset - as we're using Django's default view functions,
             # we can't namespace these urls as that prevents
             # the reverse function from working.
-<<<<<<< HEAD
             #url(r'^password-reset/$',
             #    login_forbidden(
             #        auth_views.PasswordResetView.as_view(
