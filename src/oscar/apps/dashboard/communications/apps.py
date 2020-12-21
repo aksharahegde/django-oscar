@@ -13,12 +13,13 @@ class CommunicationsDashboardConfig(OscarDashboardConfig):
     default_permissions = ['is_staff', ]
 
     def ready(self):
-        self.list_view = get_class('dashboard.communications.views', 'ListView')
-        self.update_view = get_class('dashboard.communications.views', 'UpdateView')
+        pass
+        # self.list_view = get_class('dashboard.communications.views', 'ListView')
+        # self.update_view = get_class('dashboard.communications.views', 'UpdateView')
 
     def get_urls(self):
         urls = [
-            path('', self.list_view.as_view(), name='comms-list'),
-            path('<slug:slug>/', self.update_view.as_view(), name='comms-update'),
+            # path('', self.list_view.as_view(), name='comms-list'),
+            # path('<slug:slug>/', self.update_view.as_view(), name='comms-update'),
         ]
         return self.post_process_urls(urls)

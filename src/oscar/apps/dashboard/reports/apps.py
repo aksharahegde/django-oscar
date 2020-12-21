@@ -13,10 +13,11 @@ class ReportsDashboardConfig(OscarDashboardConfig):
     default_permissions = ['is_staff', ]
 
     def ready(self):
-        self.index_view = get_class('dashboard.reports.views', 'IndexView')
+        pass
+        # self.index_view = get_class('dashboard.reports.views', 'IndexView')
 
     def get_urls(self):
         urls = [
-            path('', self.index_view.as_view(), name='reports-index'),
+            # path('', self.index_view.as_view(), name='reports-index'),
         ]
         return self.post_process_urls(urls)
