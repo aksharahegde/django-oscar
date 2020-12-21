@@ -327,7 +327,7 @@ class AbstractBankcard(models.Model):
         return self.expiry_date.strftime(format)
 
 
-@python_2_unicode_compatible
+# @python_2_unicode_compatible
 class AbstractInvoice(models.Model):
 
     def __str__(self):
