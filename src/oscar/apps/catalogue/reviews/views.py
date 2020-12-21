@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DetailView, ListView, View
 
 from oscar.apps.catalogue.reviews.signals import review_added
@@ -18,7 +18,7 @@ Product = get_model('catalogue', 'product')
 
 
 class CreateProductReview(CreateView):
-    template_name = "catalogue/reviews/review_form.html"
+    template_name = "oscar/catalogue/reviews/review_form.html"
     model = ProductReview
     product_model = Product
     form_class = ProductReviewForm
@@ -36,22 +36,22 @@ class CreateProductReview(CreateView):
             messages.warning(self.request, message)
             return redirect(self.product.get_absolute_url())
 
-        return super(CreateProductReview, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(CreateProductReview, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['product'] = self.product
         return context
 
     def get_form_kwargs(self):
-        kwargs = super(CreateProductReview, self).get_form_kwargs()
+        kwargs = super().get_form_kwargs()
         kwargs['product'] = self.product
         kwargs['user'] = self.request.user
         return kwargs
 
     def form_valid(self, form):
-        response = super(CreateProductReview, self).form_valid(form)
+        response = super().form_valid(form)
         self.send_signal(self.request, response, self.object)
         return response
 
@@ -66,12 +66,12 @@ class CreateProductReview(CreateView):
 
 
 class ProductReviewDetail(DetailView):
-    template_name = "catalogue/reviews/review_detail.html"
+    template_name = "oscar/catalogue/reviews/review_detail.html"
     context_object_name = 'review'
     model = ProductReview
 
     def get_context_data(self, **kwargs):
-        context = super(ProductReviewDetail, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['product'] = get_object_or_404(
             Product, pk=self.kwargs['product_pk'])
         return context
@@ -107,7 +107,7 @@ class ProductReviewList(ListView):
     """
     Browse reviews for a product
     """
-    template_name = 'catalogue/reviews/review_list.html'
+    template_name = 'oscar/catalogue/reviews/review_list.html'
     context_object_name = "reviews"
     model = ProductReview
     product_model = Product
@@ -116,14 +116,14 @@ class ProductReviewList(ListView):
     def get_queryset(self):
         qs = self.model.objects.approved().filter(product=self.kwargs['product_pk'])
         self.form = SortReviewsForm(self.request.GET)
-        if self.form.is_valid():
+        if self.request.GET and self.form.is_valid():
             sort_by = self.form.cleaned_data['sort_by']
             if sort_by == SortReviewsForm.SORT_BY_RECENCY:
                 return qs.order_by('-date_created')
         return qs.order_by('-score')
 
     def get_context_data(self, **kwargs):
-        context = super(ProductReviewList, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['product'] = get_object_or_404(
             self.product_model, pk=self.kwargs['product_pk'])
         context['form'] = self.form

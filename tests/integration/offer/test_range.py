@@ -1,7 +1,7 @@
 from django.test import TestCase
 
-from oscar.apps.offer import models
 from oscar.apps.catalogue import models as catalogue_models
+from oscar.apps.offer import models
 from oscar.test.factories import create_product
 
 
@@ -15,17 +15,19 @@ class TestWholeSiteRange(TestCase):
     def test_all_products_range(self):
         self.assertTrue(self.range.contains_product(self.prod))
 
-    def test_all_products_excludes_child_products(self):
+    def test_all_products_includes_child_products(self):
         child_product = create_product(structure='child', parent=self.prod)
-        self.assertTrue(child_product not in self.range.all_products())
+        self.assertTrue(child_product in self.range.all_products())
 
     def test_whitelisting(self):
         self.range.add_product(self.prod)
         self.assertTrue(self.range.contains_product(self.prod))
+        self.assertIn(self.prod, self.range.all_products())
 
     def test_blacklisting(self):
         self.range.excluded_products.add(self.prod)
         self.assertFalse(self.range.contains_product(self.prod))
+        self.assertNotIn(self.prod, self.range.all_products())
 
 
 class TestChildRange(TestCase):
@@ -46,6 +48,13 @@ class TestChildRange(TestCase):
 
     def test_does_not_include_sibling(self):
         self.assertFalse(self.range.contains_product(self.child2))
+
+    def test_parent_with_child_exception(self):
+        self.range.add_product(self.parent)
+        self.range.remove_product(self.child1)
+        self.assertTrue(self.range.contains_product(self.parent))
+        self.assertTrue(self.range.contains_product(self.child2))
+        self.assertFalse(self.range.contains_product(self.child1))
 
 
 class TestPartialRange(TestCase):
@@ -207,11 +216,11 @@ class TestPartialRange(TestCase):
             product=product, category=included_category)
         self.range.included_categories.add(included_category)
 
-        self.range.invalidate_cached_ids()
+        self.range.invalidate_cached_queryset()
         self.assertFalse(self.range.is_reorderable)
 
         self.range.included_categories.remove(included_category)
-        self.range.invalidate_cached_ids()
+        self.range.invalidate_cached_queryset()
         self.assertTrue(self.range.is_reorderable)
 
 

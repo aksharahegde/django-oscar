@@ -1,17 +1,16 @@
 import logging
 
 from django.conf import settings
-from django.contrib.auth import login as auth_login
 from django.contrib.auth import authenticate
-from django.contrib.sites.shortcuts import get_current_site
+from django.contrib.auth import login as auth_login
 
 from oscar.apps.customer.signals import user_registered
 from oscar.core.compat import get_user_model
 from oscar.core.loading import get_class, get_model
 
 User = get_user_model()
-CommunicationEventType = get_model('customer', 'CommunicationEventType')
-Dispatcher = get_class('customer.utils', 'Dispatcher')
+CommunicationEventType = get_model('communication', 'CommunicationEventType')
+CustomerDispatcher = get_class('customer.utils', 'CustomerDispatcher')
 
 logger = logging.getLogger('oscar.customer')
 
@@ -31,14 +30,13 @@ class PageTitleMixin(object):
         return self.page_title
 
     def get_context_data(self, **kwargs):
-        ctx = super(PageTitleMixin, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx.setdefault('page_title', self.get_page_title())
         ctx.setdefault('active_tab', self.active_tab)
         return ctx
 
 
 class RegisterUserMixin(object):
-    communication_type_code = 'REGISTRATION'
 
     def register_user(self, form):
         """
@@ -84,10 +82,5 @@ class RegisterUserMixin(object):
         return user
 
     def send_registration_email(self, user):
-        code = self.communication_type_code
-        ctx = {'user': user,
-               'site': get_current_site(self.request)}
-        messages = CommunicationEventType.objects.get_and_render(
-            code, ctx)
-        if messages and messages['body']:
-            Dispatcher().dispatch_user_messages(user, messages)
+        extra_context = {'user': user}
+        CustomerDispatcher().send_registration_email_for_user(user, extra_context)

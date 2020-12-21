@@ -1,8 +1,8 @@
+from urllib import parse
+
 from django import template
 from django.urls import Resolver404, resolve
-from django.utils import six
-from django.utils.six.moves.urllib import parse
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.apps.customer import history
 from oscar.core.loading import get_model
@@ -12,7 +12,7 @@ Site = get_model('sites', 'Site')
 register = template.Library()
 
 
-@register.inclusion_tag('customer/history/recently_viewed_products.html',
+@register.inclusion_tag('oscar/customer/history/recently_viewed_products.html',
                         takes_context=True)
 def recently_viewed_products(context, current_product=None):
     """
@@ -67,4 +67,4 @@ def get_back_button(context):
     if title is None:
         return None
 
-    return {'url': referrer, 'title': six.text_type(title), 'match': match}
+    return {'url': referrer, 'title': str(title), 'match': match}

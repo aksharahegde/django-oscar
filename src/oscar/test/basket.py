@@ -20,10 +20,10 @@ def add_product(basket, price=None, quantity=1, product=None):
     if price is None:
         price = D('1')
     if product and product.has_stockrecords:
-        record = product.stockrecords.all()[0]
+        record = product.stockrecords.first()
     else:
         record = factories.create_stockrecord(
-            product=product, price_excl_tax=price,
+            product=product, price=price,
             num_in_stock=quantity + 1)
     basket.add_product(record.product, quantity)
 

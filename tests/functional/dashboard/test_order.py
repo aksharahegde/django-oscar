@@ -1,15 +1,15 @@
+from http import client as http_client
+
 from django.conf import settings
 from django.urls import reverse
-from django.utils.six.moves import http_client
 
-from oscar.core.loading import get_model
 from oscar.apps.order.models import (
     Order, OrderNote, PaymentEvent, PaymentEventType)
-from oscar.test.factories import PartnerFactory, ShippingAddressFactory
-from oscar.test.factories import create_order, create_basket
+from oscar.core.loading import get_model
+from oscar.test.factories import (
+    PartnerFactory, ShippingAddressFactory, SourceTypeFactory,
+    create_basket, create_order)
 from oscar.test.testcases import WebTestCase
-from oscar.test.factories import SourceTypeFactory
-
 
 Basket = get_model('basket', 'Basket')
 Partner = get_model('partner', 'Partner')
@@ -50,7 +50,7 @@ class PermissionBasedDashboardOrderTestsBase(WebTestCase):
         """
         Creates two orders. order_in has self.user in it's partner users list.
         """
-        super(PermissionBasedDashboardOrderTestsBase, self).setUp()
+        super().setUp()
         self.address = ShippingAddressFactory()
         self.basket_in = create_basket()
         self.basket_out = create_basket()
@@ -209,7 +209,7 @@ class TestOrderListSearch(WebTestCase):
             self.assertEqual(response.status_code, 200)
             applied_filters = [
                 el.text.strip() for el in
-                response.html.select('.search-filter-list .label')
+                response.html.select('.search-filter-list .badge')
             ]
             self.assertEqual(applied_filters, expected_filters)
 
@@ -218,7 +218,7 @@ class TestOrderDetailPage(WebTestCase):
     is_staff = True
 
     def setUp(self):
-        super(TestOrderDetailPage, self).setUp()
+        super().setUp()
         # ensures that initial statuses are as expected
         self.order = create_order()
         self.event_type = PaymentEventType.objects.create(name='foo')
@@ -276,9 +276,9 @@ class TestChangingOrderStatus(WebTestCase):
     is_staff = True
 
     def setUp(self):
-        super(TestChangingOrderStatus, self).setUp()
+        super().setUp()
 
-        Order.pipeline = {'A': ('B', 'C')}
+        Order.pipeline = {'A': ('B', 'C'), 'B': ('C', ), 'C': ()}
         self.order = create_order(status='A')
         url = reverse('dashboard:order-detail',
                       kwargs={'number': self.order.number})
@@ -305,7 +305,7 @@ class TestChangingOrderStatusFromFormOnOrderListView(WebTestCase):
     is_staff = True
 
     def setUp(self):
-        super(TestChangingOrderStatusFromFormOnOrderListView, self).setUp()
+        super().setUp()
 
         Order.pipeline = {'A': ('B', 'C'), 'B': ('A', 'C'), 'C': ('A', 'B')}
         self.order = create_order(status='A')
@@ -340,7 +340,7 @@ class LineDetailTests(WebTestCase):
         self.url = reverse('dashboard:order-line-detail',
                            kwargs={'number': self.order.number,
                                    'line_id': self.line.id})
-        super(LineDetailTests, self).setUp()
+        super().setUp()
 
     def test_line_detail_page_exists(self):
         response = self.get(self.url)

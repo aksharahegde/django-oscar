@@ -9,14 +9,14 @@ Core models are abstract
 ------------------------
 
 Online shops can vary wildly, selling everything from turnips to concert
-tickets.  Trying to define a set of Django models capable for modeling all such
+tickets.  Trying to define a set of Django models capable for modelling all such
 scenarios is impossible - customisation is what matters.
 
 One way to model your domain is to have enormous models that have fields for
-every possible variation; however, this is unwieldy and ugly.  
+every possible variation; however, this is unwieldy and ugly.
 
-Another is to use the Entity-Attribute-Value pattern to use add meta-data for each of 
-your models.  However this is again ugly and mixes meta-data and data in your database (it's 
+Another is to use the Entity-Attribute-Value pattern to use add meta-data for each of
+your models.  However this is again ugly and mixes meta-data and data in your database (it's
 an SQL anti-pattern).
 
 Oscar's approach to this problem is to have minimal but abstract models
@@ -37,10 +37,10 @@ Oscar need to be as customisable as possible. Hence almost all classes
 :doc:`dynamically loaded </topics/class_loading_explained>`,
 which results in a maintainable approach to customising behaviour.
 
-URLs and permissions for apps are handled by Application instances
-------------------------------------------------------------------
+URLs and permissions for apps are handled by app config instances
+-----------------------------------------------------------------
 
-The :class:`oscar.core.application.Application` class handles mapping URLs
+The :class:`oscar.core.application.OscarConfig` class handles mapping URLs
 to views and permissions at an per-app level. This makes Oscar's apps more
 modular, and makes it easy to customise this mapping as they can be overridden
 just like any other class in Oscar.

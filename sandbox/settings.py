@@ -10,22 +10,10 @@ location = lambda x: os.path.join(
 
 DEBUG = env.bool('DEBUG', default=True)
 
-ALLOWED_HOSTS = [
-    'latest.oscarcommerce.com',
-    'master.oscarcommerce.com',
-    'localhost',
-    '127.0.0.1',
-]
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
-# This is needed for the hosted version of the sandbox
-ADMINS = (
-    ('David Winterbottom', 'david.winterbottom@gmail.com'),
-    ('Michael van Tellingen', 'michaelvantellingen@gmail.com'),
-)
 EMAIL_SUBJECT_PREFIX = '[Oscar sandbox] '
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-MANAGERS = ADMINS
 
 # Use a Sqlite database by default
 DATABASES = {
@@ -50,8 +38,6 @@ CACHES = {
 # although not all choices may be available on all operating systems.
 # On Unix systems, a value of None will cause Django to use the same
 # timezone as the operating system.
-# If running in a Windows environment this must be set to the same as your
-# system time zone.
 USE_TZ = True
 TIME_ZONE = 'Europe/London'
 
@@ -119,14 +105,13 @@ STATICFILES_FINDERS = (
 )
 
 # Make this unique, and don't share it with anybody.
-SECRET_KEY = '$)a7n&o80u!6y5t-+jrd3)3!%vh&shg$wqpjpxc!ar&p#!)n1a'
+SECRET_KEY = env.str('SECRET_KEY', default='UajFCuyjDKmWHe29neauXzHi9eZoRXr6RMbT5JyAdPiACBP6Cra2')
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
             location('templates'),
-            oscar.OSCAR_MAIN_TEMPLATE_DIR,
         ],
         'OPTIONS': {
             'loaders': [
@@ -144,8 +129,7 @@ TEMPLATES = [
 
                 # Oscar specific
                 'oscar.apps.search.context_processors.search_form',
-                'oscar.apps.customer.notifications.context_processors.notifications',
-                'oscar.apps.promotions.context_processors.promotions',
+                'oscar.apps.communication.notifications.context_processors.notifications',
                 'oscar.apps.checkout.context_processors.checkout',
                 'oscar.core.context_processors.metadata',
             ],
@@ -162,6 +146,7 @@ MIDDLEWARE = [
 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.contrib.flatpages.middleware.FlatpageFallbackMiddleware',
@@ -261,22 +246,61 @@ LOGGING = {
 
 
 INSTALLED_APPS = [
+    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    'django.contrib.sites',
     'django.contrib.messages',
-    'django.contrib.admin',
-    'django.contrib.flatpages',
     'django.contrib.staticfiles',
-    'django.contrib.sitemaps',
-    'django_extensions',
+    'django.contrib.sites',
+    'django.contrib.flatpages',
 
-    # Debug toolbar + extensions
-    'debug_toolbar',
-    'apps.gateway',     # For allowing dashboard access
+    'oscar.config.Shop',
+    'oscar.apps.analytics.apps.AnalyticsConfig',
+    'oscar.apps.checkout.apps.CheckoutConfig',
+    'oscar.apps.address.apps.AddressConfig',
+    'oscar.apps.shipping.apps.ShippingConfig',
+    'oscar.apps.catalogue.apps.CatalogueConfig',
+    'oscar.apps.catalogue.reviews.apps.CatalogueReviewsConfig',
+    'oscar.apps.communication.apps.CommunicationConfig',
+    'oscar.apps.partner.apps.PartnerConfig',
+    'oscar.apps.basket.apps.BasketConfig',
+    'oscar.apps.payment.apps.PaymentConfig',
+    'oscar.apps.offer.apps.OfferConfig',
+    'oscar.apps.order.apps.OrderConfig',
+    'oscar.apps.customer.apps.CustomerConfig',
+    'oscar.apps.search.apps.SearchConfig',
+    'oscar.apps.voucher.apps.VoucherConfig',
+    'oscar.apps.wishlists.apps.WishlistsConfig',
+    'oscar.apps.dashboard.apps.DashboardConfig',
+    'oscar.apps.dashboard.reports.apps.ReportsDashboardConfig',
+    'oscar.apps.dashboard.users.apps.UsersDashboardConfig',
+    'oscar.apps.dashboard.orders.apps.OrdersDashboardConfig',
+    'oscar.apps.dashboard.catalogue.apps.CatalogueDashboardConfig',
+    'oscar.apps.dashboard.offers.apps.OffersDashboardConfig',
+    'oscar.apps.dashboard.partners.apps.PartnersDashboardConfig',
+    'oscar.apps.dashboard.pages.apps.PagesDashboardConfig',
+    'oscar.apps.dashboard.ranges.apps.RangesDashboardConfig',
+    'oscar.apps.dashboard.reviews.apps.ReviewsDashboardConfig',
+    'oscar.apps.dashboard.vouchers.apps.VouchersDashboardConfig',
+    'oscar.apps.dashboard.communications.apps.CommunicationsDashboardConfig',
+    'oscar.apps.dashboard.shipping.apps.ShippingDashboardConfig',
+
+    # 3rd-party apps that Oscar depends on
     'widget_tweaks',
-] + oscar.get_core_apps()
+    'haystack',
+    'treebeard',
+    'sorl.thumbnail',
+    'easy_thumbnails',
+    'django_tables2',
+
+    # Django apps that the sandbox depends on
+    'django.contrib.sitemaps',
+
+    # 3rd-party apps that the sandbox depends on
+    'django_extensions',
+    'debug_toolbar',
+]
 
 # Add Oscar's custom auth backend so users can sign in using their email
 # address.
@@ -320,7 +344,7 @@ HAYSTACK_CONNECTIONS = {
 #HAYSTACK_CONNECTIONS = {
 #    'default': {
 #        'ENGINE': 'haystack.backends.solr_backend.SolrEngine',
-#        'URL': u'http://127.0.0.1:8983/solr/oscar_latest/',
+#        'URL': 'http://127.0.0.1:8983/solr/oscar_latest/',
 #        'INCLUDE_SPELLING': True
 #    },
 #}
@@ -371,28 +395,6 @@ OSCAR_ORDER_STATUS_CASCADE = {
     'Complete': 'Shipped',
 }
 
-# LESS/CSS
-# ========
-
-# We default to using CSS files, rather than the LESS files that generate them.
-# If you want to develop Oscar's CSS, then set OSCAR_USE_LESS=True to enable the
-# on-the-fly less processor.
-OSCAR_USE_LESS = False
-
-
-# Sentry
-# ======
-
-if env('SENTRY_DSN', default=None):
-    RAVEN_CONFIG = {'dsn': env('SENTRY_DSN', default=None)}
-    LOGGING['handlers']['sentry'] = {
-        'level': 'ERROR',
-        'class': 'raven.contrib.django.raven_compat.handlers.SentryHandler',
-    }
-    LOGGING['root']['handlers'].append('sentry')
-    INSTALLED_APPS.append('raven.contrib.django.raven_compat')
-
-
 # Sorl
 # ====
 
@@ -411,6 +413,11 @@ THUMBNAIL_REDIS_URL = env('THUMBNAIL_REDIS_URL', default=None)
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 
 INVOICE_MODEL = 'payment.Invoice'
+# Security
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
+SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=0)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
 
 # Try and import local settings which can be used to override any of the above.
 try:

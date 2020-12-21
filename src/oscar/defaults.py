@@ -1,11 +1,11 @@
 from collections import OrderedDict
 
 from django.urls import reverse_lazy
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 OSCAR_SHOP_NAME = 'Oscar'
 OSCAR_SHOP_TAGLINE = ''
-OSCAR_HOMEPAGE = reverse_lazy('promotions:home')
+OSCAR_HOMEPAGE = reverse_lazy('catalogue:index')
 
 # Dynamic class loading
 OSCAR_DYNAMIC_CLASS_LOADER = 'oscar.core.loading.default_class_loader'
@@ -27,13 +27,11 @@ OSCAR_DEFAULT_CURRENCY = 'GBP'
 
 # Paths
 OSCAR_IMAGE_FOLDER = 'images/products/%Y/%m/'
-OSCAR_PROMOTION_FOLDER = 'images/promotions/'
 OSCAR_DELETE_IMAGE_FILES = True
 
 # Copy this image from oscar/static/img to your MEDIA_ROOT folder.
 # It needs to be there so Sorl can resize it.
 OSCAR_MISSING_IMAGE_URL = 'image_not_found.jpg'
-OSCAR_UPLOAD_ROOT = '/tmp'
 
 # Address settings
 OSCAR_REQUIRED_ADDRESS_FIELDS = ('first_name', 'last_name', 'line1',
@@ -53,11 +51,6 @@ OSCAR_DASHBOARD_ITEMS_PER_PAGE = 20
 
 # Checkout
 OSCAR_ALLOW_ANON_CHECKOUT = False
-
-# Promotions
-OSCAR_PROMOTION_POSITIONS = (('page', 'Page'),
-                             ('right', 'Right-hand sidebar'),
-                             ('left', 'Left-hand sidebar'))
 
 # Reviews
 OSCAR_ALLOW_ANON_REVIEWS = True
@@ -87,6 +80,9 @@ OSCAR_SLUG_ALLOW_UNICODE = False
 # Cookies
 OSCAR_COOKIES_DELETE_ON_LOGOUT = ['oscar_recently_viewed_products', ]
 
+# Offers
+OSCAR_OFFERS_INCL_TAX = False
+
 # Hidden Oscar features, e.g. wishlists or reviews
 OSCAR_HIDDEN_FEATURES = []
 
@@ -94,12 +90,12 @@ OSCAR_HIDDEN_FEATURES = []
 OSCAR_DASHBOARD_NAVIGATION = [
     {
         'label': _('Dashboard'),
-        'icon': 'icon-th-list',
+        'icon': 'fas fa-list',
         'url_name': 'dashboard:index',
     },
     {
         'label': _('Catalogue'),
-        'icon': 'icon-sitemap',
+        'icon': 'fas fa-sitemap',
         'children': [
             {
                 'label': _('Products'),
@@ -121,11 +117,15 @@ OSCAR_DASHBOARD_NAVIGATION = [
                 'label': _('Low stock alerts'),
                 'url_name': 'dashboard:stock-alert-list',
             },
+            {
+                'label': _('Options'),
+                'url_name': 'dashboard:catalogue-option-list',
+            },
         ]
     },
     {
         'label': _('Fulfilment'),
-        'icon': 'icon-shopping-cart',
+        'icon': 'fas fa-shopping-cart',
         'children': [
             {
                 'label': _('Orders'),
@@ -151,7 +151,7 @@ OSCAR_DASHBOARD_NAVIGATION = [
     },
     {
         'label': _('Customers'),
-        'icon': 'icon-group',
+        'icon': 'fas fa-users',
         'children': [
             {
                 'label': _('Customers'),
@@ -165,7 +165,7 @@ OSCAR_DASHBOARD_NAVIGATION = [
     },
     {
         'label': _('Offers'),
-        'icon': 'icon-bullhorn',
+        'icon': 'fas fa-bullhorn',
         'children': [
             {
                 'label': _('Offers'),
@@ -184,16 +184,8 @@ OSCAR_DASHBOARD_NAVIGATION = [
     },
     {
         'label': _('Content'),
-        'icon': 'icon-folder-close',
+        'icon': 'fas fa-folder',
         'children': [
-            {
-                'label': _('Content blocks'),
-                'url_name': 'dashboard:promotion-list',
-            },
-            {
-                'label': _('Content blocks by page'),
-                'url_name': 'dashboard:promotion-list-by-page',
-            },
             {
                 'label': _('Pages'),
                 'url_name': 'dashboard:page-list',
@@ -210,7 +202,7 @@ OSCAR_DASHBOARD_NAVIGATION = [
     },
     {
         'label': _('Reports'),
-        'icon': 'icon-bar-chart',
+        'icon': 'fas fa-chart-bar',
         'url_name': 'dashboard:reports-index',
     },
 ]
@@ -241,15 +233,19 @@ OSCAR_SEARCH_FACETS = {
              'queries': [
                  # This is a list of (name, query) tuples where the name will
                  # be displayed on the front-end.
-                 (_('0 to 20'), u'[0 TO 20]'),
-                 (_('20 to 40'), u'[20 TO 40]'),
-                 (_('40 to 60'), u'[40 TO 60]'),
-                 (_('60+'), u'[60 TO *]'),
+                 (_('0 to 20'), '[0 TO 20]'),
+                 (_('20 to 40'), '[20 TO 40]'),
+                 (_('40 to 60'), '[40 TO 60]'),
+                 (_('60+'), '[60 TO *]'),
              ]
          }),
     ]),
 }
 
-
-OSCAR_PROMOTIONS_ENABLED = True
 OSCAR_PRODUCT_SEARCH_HANDLER = None
+
+OSCAR_THUMBNAILER = 'oscar.core.thumbnails.SorlThumbnail'
+
+OSCAR_URL_SCHEMA = 'http'
+
+OSCAR_SAVE_SENT_EMAILS_TO_DB = True

@@ -1,4 +1,4 @@
-{% extends "checkout/checkout.html" %}
+{% extends "oscar/checkout/checkout.html" %}
 {% load i18n %}
 
 {% block title %}
@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block checkout_nav %}
-    {% include 'checkout/nav.html' with step=4 %}
+    {% include 'oscar/checkout/nav.html' with step=4 %}
 {% endblock %}
 
 {% block checkout_title %}
@@ -30,7 +30,7 @@
 
         <div class="form-group clearfix">
             <div class="row">
-                <div class="col-sm-3 col-sm-offset-9">
+                <div class="col-sm-3 offset-sm-9">
                      <button id='place-order' type="submit" class="btn btn-primary btn-lg btn-block" data-loading-text="{% trans 'Submitting...' %}">{% trans "Place order" %}</button>
                 </div>
             </div>

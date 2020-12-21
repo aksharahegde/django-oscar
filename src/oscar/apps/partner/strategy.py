@@ -22,21 +22,21 @@ class Selector(object):
 
     This can be called in three ways:
 
-    #) Passing a request and user.  This is for determining
+    #) Passing a request and user. This is for determining
        prices/availability for a normal user browsing the site.
 
-    #) Passing just the user.  This is for offline processes that don't
+    #) Passing just the user. This is for offline processes that don't
        have a request instance but do know which user to determine prices for.
 
-    #) Passing nothing.  This is for offline processes that don't
-       correspond to a specific user.  Eg, determining a price to store in
+    #) Passing nothing. This is for offline processes that don't
+       correspond to a specific user, e.g., determining a price to store in
        a search index.
 
     """
 
     def strategy(self, request=None, user=None, **kwargs):
         """
-        Return an instanticated strategy instance
+        Return an instantiated strategy instance
         """
         # Default to the backwards-compatible strategy of picking the first
         # stockrecord but charging zero tax.
@@ -150,7 +150,7 @@ class Structured(Base):
         Select appropriate stock record for all children of a product
         """
         records = []
-        for child in product.children.all():
+        for child in product.children.public():
             # Use tuples of (child product, stockrecord)
             records.append((child, self.select_stockrecord(child)))
         return records
@@ -195,10 +195,7 @@ class UseFirstStockRecord(object):
     """
 
     def select_stockrecord(self, product):
-        try:
-            return product.stockrecords.all()[0]
-        except IndexError:
-            return None
+        return product.stockrecords.first()
 
 
 class StockRequired(object):
@@ -220,7 +217,7 @@ class StockRequired(object):
     def parent_availability_policy(self, product, children_stock):
         # A parent product is available if one of its children is
         for child, stockrecord in children_stock:
-            policy = self.availability_policy(product, stockrecord)
+            policy = self.availability_policy(child, stockrecord)
             if policy.is_available_to_buy:
                 return Available()
         return Unavailable()
@@ -229,17 +226,17 @@ class StockRequired(object):
 class NoTax(object):
     """
     Pricing policy mixin for use with the ``Structured`` base strategy.
-    This mixin specifies zero tax and uses the ``price_excl_tax`` from the
+    This mixin specifies zero tax and uses the ``price`` from the
     stockrecord.
     """
 
     def pricing_policy(self, product, stockrecord):
         # Check stockrecord has the appropriate data
-        if not stockrecord or stockrecord.price_excl_tax is None:
+        if not stockrecord or stockrecord.price is None:
             return UnavailablePrice()
         return FixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax,
+            excl_tax=stockrecord.price,
             tax=D('0.00'))
 
     def parent_pricing_policy(self, product, children_stock):
@@ -250,7 +247,7 @@ class NoTax(object):
         stockrecord = stockrecords[0]
         return FixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax,
+            excl_tax=stockrecord.price,
             tax=D('0.00'))
 
 
@@ -265,14 +262,14 @@ class FixedRateTax(object):
     exponent = D('0.01')  # Default to two decimal places
 
     def pricing_policy(self, product, stockrecord):
-        if not stockrecord or stockrecord.price_excl_tax is None:
+        if not stockrecord or stockrecord.price is None:
             return UnavailablePrice()
         rate = self.get_rate(product, stockrecord)
         exponent = self.get_exponent(stockrecord)
-        tax = (stockrecord.price_excl_tax * rate).quantize(exponent)
+        tax = (stockrecord.price * rate).quantize(exponent)
         return TaxInclusiveFixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax,
+            excl_tax=stockrecord.price,
             tax=tax)
 
     def parent_pricing_policy(self, product, children_stock):
@@ -284,11 +281,11 @@ class FixedRateTax(object):
         stockrecord = stockrecords[0]
         rate = self.get_rate(product, stockrecord)
         exponent = self.get_exponent(stockrecord)
-        tax = (stockrecord.price_excl_tax * rate).quantize(exponent)
+        tax = (stockrecord.price * rate).quantize(exponent)
 
         return FixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax,
+            excl_tax=stockrecord.price,
             tax=tax)
 
     def get_rate(self, product, stockrecord):
@@ -318,11 +315,11 @@ class DeferredTax(object):
     """
 
     def pricing_policy(self, product, stockrecord):
-        if not stockrecord or stockrecord.price_excl_tax is None:
+        if not stockrecord or stockrecord.price is None:
             return UnavailablePrice()
         return FixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax)
+            excl_tax=stockrecord.price)
 
     def parent_pricing_policy(self, product, children_stock):
         stockrecords = [x[1] for x in children_stock if x[1] is not None]
@@ -334,7 +331,7 @@ class DeferredTax(object):
 
         return FixedPrice(
             currency=stockrecord.price_currency,
-            excl_tax=stockrecord.price_excl_tax)
+            excl_tax=stockrecord.price)
 
 
 # Example strategy composed of above mixins.  For real projects, it's likely

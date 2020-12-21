@@ -1,9 +1,13 @@
+.. spelling::
+
+    Solr
+
 ======================
 Building your own shop
 ======================
 
 For simplicity, let's assume you're building a new e-commerce project from
-scratch and have decided to use Oscar.  Let's call this shop 'frobshop'
+scratch and have decided to use Oscar.  Let's call this project ``frobshop``
 
 .. tip::
 
@@ -20,10 +24,10 @@ project:
 .. code-block:: bash
 
     $ mkvirtualenv oscar
-    $ pip install django-oscar
-    $ django-admin.py startproject frobshop
+    $ pip install django-oscar[sorl-thumbnail]
+    $ django-admin startproject frobshop
 
-If you do not have mkvirtualenv, then replace that line with::
+If you do not have :command:`mkvirtualenv`, then replace that line with::
 
     $ virtualenv oscar
     $ . ./oscar/bin/activate
@@ -31,6 +35,12 @@ If you do not have mkvirtualenv, then replace that line with::
 
 This will create a folder ``frobshop`` for your project. It is highly
 recommended to install Oscar in a virtualenv.
+
+.. tip::
+
+    ``sorl-thumbnail`` is an optional dependency for image thumbnail, but is what Oscar expects
+    to use by default. It can be replaced with ``easy-thumbnails`` or a custom thumbnail backend. If you want to
+    use a different backend then remember to change the ``OSCAR_THUMBNAILER`` setting to point to it.
 
 .. attention::
 
@@ -47,66 +57,77 @@ recommended to install Oscar in a virtualenv.
 Django settings
 ===============
 
-First, edit your settings file ``frobshop.frobshop.settings.py`` to import all of Oscar's default settings.
+First, edit your settings file ``frobshop/frobshop/settings.py`` to import all of Oscar's default settings.
 
 .. code-block:: django
 
     from oscar.defaults import *
 
 
-Now modify your ``TEMPLATES`` to include the main Oscar template directory and add the extra
-context processors.
+Now add Oscar's context processors to the template settings, listed below:
 
 .. code-block:: django
 
-    from oscar import OSCAR_MAIN_TEMPLATE_DIR
+    'oscar.apps.search.context_processors.search_form',
+    'oscar.apps.checkout.context_processors.checkout',
+    'oscar.apps.communication.notifications.context_processors.notifications',
+    'oscar.core.context_processors.metadata',
 
-    TEMPLATES = [
-        {
-            'BACKEND': 'django.template.backends.django.DjangoTemplates',
-            'DIRS': [
-                os.path.join(BASE_DIR, 'templates'),
-                OSCAR_MAIN_TEMPLATE_DIR
-            ],
-            'APP_DIRS': True,
-            'OPTIONS': {
-                'context_processors': [
-                    'django.template.context_processors.debug',
-                    'django.template.context_processors.request',
-                    'django.contrib.auth.context_processors.auth',
-                    'django.template.context_processors.i18n',
-                    'django.contrib.messages.context_processors.messages',
-
-                    'oscar.apps.search.context_processors.search_form',
-                    'oscar.apps.promotions.context_processors.promotions',
-                    'oscar.apps.checkout.context_processors.checkout',
-                    'oscar.apps.customer.notifications.context_processors.notifications',
-                    'oscar.core.context_processors.metadata',
-                ],
-            },
-        },
-    ]
-
-Next, modify ``INSTALLED_APPS`` to be a list, add ``django.contrib.sites``,
-``django.contrib.flatpages``, and ``widget_tweaks`` and append
-Oscar's core apps. Also set ``SITE_ID``:
+Next, modify ``INSTALLED_APPS`` to be a list, and add ``django.contrib.sites``,
+``django.contrib.flatpages``, Oscar's core apps, and third-party apps that Oscar
+depends on. Also set ``SITE_ID``:
 
 .. code-block:: django
-
-    from oscar import get_core_apps
 
     INSTALLED_APPS = [
+        'django.contrib.admin',
         'django.contrib.auth',
         'django.contrib.contenttypes',
         'django.contrib.sessions',
-        'django.contrib.sites',
         'django.contrib.messages',
         'django.contrib.staticfiles',
+
+        'django.contrib.sites',
         'django.contrib.flatpages',
-        ...
-        'compressor',
+
+        'oscar.config.Shop',
+        'oscar.apps.analytics.apps.AnalyticsConfig',
+        'oscar.apps.checkout.apps.CheckoutConfig',
+        'oscar.apps.address.apps.AddressConfig',
+        'oscar.apps.shipping.apps.ShippingConfig',
+        'oscar.apps.catalogue.apps.CatalogueConfig',
+        'oscar.apps.catalogue.reviews.apps.CatalogueReviewsConfig',
+        'oscar.apps.communication.apps.CommunicationConfig',
+        'oscar.apps.partner.apps.PartnerConfig',
+        'oscar.apps.basket.apps.BasketConfig',
+        'oscar.apps.payment.apps.PaymentConfig',
+        'oscar.apps.offer.apps.OfferConfig',
+        'oscar.apps.order.apps.OrderConfig',
+        'oscar.apps.customer.apps.CustomerConfig',
+        'oscar.apps.search.apps.SearchConfig',
+        'oscar.apps.voucher.apps.VoucherConfig',
+        'oscar.apps.wishlists.apps.WishlistsConfig',
+        'oscar.apps.dashboard.apps.DashboardConfig',
+        'oscar.apps.dashboard.reports.apps.ReportsDashboardConfig',
+        'oscar.apps.dashboard.users.apps.UsersDashboardConfig',
+        'oscar.apps.dashboard.orders.apps.OrdersDashboardConfig',
+        'oscar.apps.dashboard.catalogue.apps.CatalogueDashboardConfig',
+        'oscar.apps.dashboard.offers.apps.OffersDashboardConfig',
+        'oscar.apps.dashboard.partners.apps.PartnersDashboardConfig',
+        'oscar.apps.dashboard.pages.apps.PagesDashboardConfig',
+        'oscar.apps.dashboard.ranges.apps.RangesDashboardConfig',
+        'oscar.apps.dashboard.reviews.apps.ReviewsDashboardConfig',
+        'oscar.apps.dashboard.vouchers.apps.VouchersDashboardConfig',
+        'oscar.apps.dashboard.communications.apps.CommunicationsDashboardConfig',
+        'oscar.apps.dashboard.shipping.apps.ShippingDashboardConfig',
+
+        # 3rd-party apps that oscar depends on
         'widget_tweaks',
-    ] + get_core_apps()
+        'haystack',
+        'treebeard',
+        'sorl.thumbnail',   # Default thumbnail backend, can be replaced
+        'django_tables2',
+    ]
 
     SITE_ID = 1
 
@@ -118,11 +139,10 @@ More info about installing ``flatpages`` is in the `Django docs`_.
 
 .. tip::
 
-    Oscar's default templates use django-compressor_ and django-widget-tweaks_
-    but it's optional really.  You may decide to use your own templates that
-    don't use either.  Hence why they are not in the 'core apps'.
+    Oscar's default templates use django-widget-tweaks_ but it's
+    optional really.  You may decide to use your own templates that
+    don't use either.
 
-.. _django-compressor: https://github.com/jezdez/django_compressor
 .. _django-widget-tweaks: https://github.com/kmike/django-widget-tweaks
 
 Next, add ``oscar.apps.basket.middleware.BasketMiddleware`` and
@@ -137,7 +157,7 @@ your ``MIDDLEWARE`` setting.
         'django.contrib.flatpages.middleware.FlatpageFallbackMiddleware',
     )
 
-Set your auth backends to:
+Set your authentication backends to:
 
 .. code-block:: django
 
@@ -158,33 +178,6 @@ files from a remote storage (e.g. Amazon S3), you must manually copy a
 .. _`configured correctly`: https://docs.djangoproject.com/en/stable/howto/static-files/
 .. _sandbox settings: https://github.com/django-oscar/django-oscar/blob/master/sandbox/settings.py#L102
 
-
-URLs
-====
-
-Alter your ``frobshop/urls.py`` to include Oscar's URLs. You can also include
-the Django admin for debugging purposes. But please note that Oscar makes no
-attempts at having that be a workable interface; admin integration exists
-to ease the life of developers.
-
-If you have more than one language set your Django settings for ``LANGUAGES``,
-you will also need to include Django's i18n URLs:
-
-.. code-block:: django
-
-    from django.conf.urls import include, url
-    from django.contrib import admin
-    from oscar.app import application
-
-    urlpatterns = [
-        url(r'^i18n/', include('django.conf.urls.i18n')),
-
-        # The Django admin is not officially supported; expect breakage.
-        # Nonetheless, it's often useful for debugging.
-        url(r'^admin/', include(admin.site.urls)),
-
-        url(r'', include(application.urls)),
-    ]
 
 Search backend
 ==============
@@ -240,6 +233,35 @@ Check your database settings. A quick way to get started is to use SQLite:
 Note that we recommend using ``ATOMIC_REQUESTS`` to tie transactions to
 requests.
 
+URLs
+====
+
+Alter your ``frobshop/urls.py`` to include Oscar's URLs. You can also include
+the Django admin for debugging purposes. But please note that Oscar makes no
+attempts at having that be a workable interface; admin integration exists
+to ease the life of developers.
+
+If you have more than one language set your Django settings for ``LANGUAGES``,
+you will also need to include Django's i18n URLs:
+
+.. code-block:: django
+
+    from django.apps import apps
+    from django.urls import include, path
+    from django.contrib import admin
+
+    urlpatterns = [
+        path('i18n/', include('django.conf.urls.i18n')),
+
+        # The Django admin is not officially supported; expect breakage.
+        # Nonetheless, it's often useful for debugging.
+
+        path('admin/', admin.site.urls),
+
+        path('', include(apps.get_app_config('oscar').urls[0])),
+    ]
+
+
 Create database
 ---------------
 
@@ -280,13 +302,13 @@ manually mark at least one country as a shipping country.
 .. _pycountry: https://pypi.python.org/pypi/pycountry
 
 
-Creating product classes and fulfillment partners
+Creating product classes and fulfilment partners
 =================================================
 
 Every Oscar deployment needs at least one
 :class:`product class <oscar.apps.catalogue.abstract_models.AbstractProductClass>`
 and one
-:class:`fulfillment partner <oscar.apps.partner.abstract_models.AbstractPartner>`.
+:class:`fulfilment partner <oscar.apps.partner.abstract_models.AbstractPartner>`.
 These aren't created automatically as they're highly specific to the shop you
 want to build.
 

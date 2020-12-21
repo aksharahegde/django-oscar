@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "oscar/layout.html" %}
 {% load currency_filters %}
 {% load i18n %}
 {% load reviews_tags %}
@@ -40,7 +40,7 @@
                     <th>{% trans 'Notes' %}</th>
                     <td>{{ address.notes|linebreaks }}</td>
                 </tr>
-            {% endif %} 
+            {% endif %}
         </table>
     {% endwith %}
 
@@ -57,7 +57,6 @@
         <tr>
             <th>{% trans 'Product' %}</th>
             <th>{% trans 'Status' %}</th>
-            <th>{% trans 'Estimated dispatch date' %}</th>
             <th>{% trans 'Quantity' %}</th>
             <th>{% trans 'Line price excl. tax' %}</th>
             <th>{% trans 'Line price incl. tax' %}</th>
@@ -67,9 +66,14 @@
         </tr>
         {% for line in order.lines.all %}
             <tr>
-                <td><a href="{{ line.product.get_absolute_url }}">{{ line.description }}</a></td>
+                <td>
+                    {% if product.is_public %}
+                        <a href="{{ line.product.get_absolute_url }}">{{ line.description }}</a>
+                    {% else %}
+                        {{ line.description }}
+                    {% endif %}
+                </td>
                 <td>{{ line.shipping_status|default:"-" }}</td>
-                <td>{{ line.est_dispatch_date|default:"-" }}</td>
                 <td>{{ line.quantity }}</td>
                 <td>{{ line.line_price_before_discounts_excl_tax|currency:order.currency }}</td>
                 <td>{{ line.line_price_before_discounts_incl_tax|currency:order.currency }}</td>

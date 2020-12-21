@@ -1,4 +1,4 @@
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_class, get_model
 
@@ -30,18 +30,14 @@ class VoucherReportCSVFormatter(ReportCSVFormatter):
 
 
 class VoucherReportHTMLFormatter(ReportHTMLFormatter):
-    filename_template = 'dashboard/reports/partials/voucher_report.html'
+    filename_template = 'oscar/dashboard/reports/partials/voucher_report.html'
 
 
 class VoucherReportGenerator(ReportGenerator):
-
     code = 'vouchers'
     description = _('Voucher performance')
+    model_class = Voucher
 
     formatters = {
         'CSV_formatter': VoucherReportCSVFormatter,
         'HTML_formatter': VoucherReportHTMLFormatter}
-
-    def generate(self):
-        vouchers = Voucher._default_manager.all()
-        return self.formatter.generate_response(vouchers)

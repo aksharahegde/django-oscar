@@ -2,14 +2,14 @@
 Setting up the development environment
 ======================================
 
-Fork the repo and run::
+Fork the repository and run::
 
     $ git clone git@github.com:<username>/django-oscar.git
     $ cd django-oscar
     $ mkvirtualenv oscar  # needs virtualenvwrapper
     $ make install
 
-If using Ubuntu, the ``python-dev`` package is required for some packages to
+If using Ubuntu, the ``python3-dev`` package is required for some packages to
 compile.
 
 The :doc:`sandbox </internals/sandbox>` site can be used to examine changes
@@ -23,7 +23,7 @@ JPEG Support
 On Ubuntu, you need to install a few libraries to get JPEG support with
 Pillow::
 
-    $ sudo apt-get install python-dev libjpeg-dev libfreetype6-dev zlib1g-dev
+    $ sudo apt-get install python3-dev libjpeg-dev libfreetype6-dev zlib1g-dev
 
 If you already installed PIL (you did if you ran ``make install`` previously),
 reinstall it::
@@ -38,42 +38,27 @@ As the sandbox is a vanilla Oscar site, it is what we use to build migrations
 against::
 
     $ make sandbox
-    $ sites/sandbox/manage.py schemamigration $YOURAPP --auto
-    
-Writing LESS/CSS
+    $ sandbox/manage.py makemigrations
+
+Writing SCSS/CSS
 ----------------
 
-Oscar's CSS files are built using LESS_.  However, the sandbox defaults to
-serving CSS files directly, bypassing LESS compilation.
+Oscar's CSS files are built using SASS.
 
-.. _LESS: http://lesscss.org/
+If you want to develop the SCSS files, run::
 
-If you want to develop the LESS files, set::
+    npm run watch
 
-    OSCAR_USE_LESS = True
+Which will watch for and compile changes to the source files into output CSS.
 
-in ``sites/sandbox/settings_local.py``.  This will include the on-the-fly
-``less`` pre-processor. That will allow you to see changes to the LESS
-files after a page reload.
+You can manually compile static assets files by running::
 
-You can manually compile the CSS files by running::
+    npm run build
 
-    make css
+Testing migrations
+------------------
 
-For this to work, you will need to ensure that the pre-processor binary
-``lessc`` is installed. Using npm, install LESS using::
-
-    npm install less
-
-.. warning::
-
-    If you do submit a pull request that changes the LESS files.  Please also
-    recompile the CSS files and include them in your pull request.
-
-Testing migrations against MySQL and Postgres
----------------------------------------------
-
-To test the migrations against MySQL and Postgres you will need to set
+To test the migrations against PostgreSQL you will need to set
 up an environment with both installed and do the following:
 
 1. Change to sandbox folder and activate your virtualenv
@@ -82,5 +67,4 @@ up an environment with both installed and do the following:
 
     ./test_migrations.sh
 
-    This will recreate the Oscar database in both MySQL and Postgres and rebuild
-    it using ``migrate``.
+This will recreate the Oscar database in PostgreSQL and rebuild it using ``migrate``.

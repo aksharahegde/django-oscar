@@ -56,14 +56,14 @@ class TestBasketLine(TestCase):
 
         line = basket.lines.first()
         BasketLineAttributeFactory(
-            line=line, value=u'\u2603', option__name='with')
-        self.assertEqual(line.description, u"A product (with = '\u2603')")
+            line=line, value='\u2603', option__name='with')
+        self.assertEqual(line.description, "A product (with = '\u2603')")
 
     def test_create_line_reference(self):
         basket = BasketFactory()
         product = ProductFactory(title="A product")
         option = OptionFactory(name="product_option", code="product_option")
-        option_product = ProductFactory(title=u'Asunción')
+        option_product = ProductFactory(title='Asunción')
         options = [{'option': option, 'value': option_product}]
         basket.add_product(product, options=options)
 
@@ -84,7 +84,7 @@ class TestBasketLine(TestCase):
         product = factories.create_product()
         # Tax for the default strategy will be 0
         factories.create_stockrecord(
-            product, price_excl_tax=D('75.00'), num_in_stock=10)
+            product, price=D('75.00'), num_in_stock=10)
         basket.add(product, 1)
 
         self.assertEqual(basket.lines.first().line_tax, D('0'))
@@ -95,7 +95,7 @@ class TestBasketLine(TestCase):
             """ A test strategy where the tax is not known """
 
             def pricing_policy(self, product, stockrecord):
-                return prices.FixedPrice('GBP', stockrecord.price_excl_tax, tax=None)
+                return prices.FixedPrice('GBP', stockrecord.price, tax=None)
 
         basket = Basket()
         basket.strategy = UnknownTaxStrategy()
@@ -114,7 +114,7 @@ class TestAddingAProductToABasket(TestCase):
         self.product = factories.create_product()
         self.record = factories.create_stockrecord(
             currency='GBP',
-            product=self.product, price_excl_tax=D('10.00'))
+            product=self.product, price=D('10.00'))
         self.purchase_info = factories.create_purchase_info(self.record)
         self.basket.add(self.product)
 
@@ -136,7 +136,7 @@ class TestAddingAProductToABasket(TestCase):
     def test_means_another_currency_product_cannot_be_added(self):
         product = factories.create_product()
         factories.create_stockrecord(
-            currency='USD', product=product, price_excl_tax=D('20.00'))
+            currency='USD', product=product, price=D('20.00'))
         with self.assertRaises(ValueError):
             self.basket.add(product)
 
@@ -153,7 +153,7 @@ class TestANonEmptyBasket(TestCase):
         self.basket.strategy = strategy.Default()
         self.product = factories.create_product()
         self.record = factories.create_stockrecord(
-            self.product, price_excl_tax=D('10.00'))
+            self.product, price=D('10.00'))
         self.purchase_info = factories.create_purchase_info(self.record)
         self.basket.add(self.product, 10)
 
@@ -171,21 +171,21 @@ class TestANonEmptyBasket(TestCase):
 
     def test_returns_zero_line_quantity_for_alternative_stockrecord(self):
         record = factories.create_stockrecord(
-            self.product, price_excl_tax=D('5.00'))
+            self.product, price=D('5.00'))
         self.assertEqual(0, self.basket.line_quantity(
             self.product, record))
 
     def test_returns_zero_line_quantity_for_missing_product_and_stockrecord(self):
         product = factories.create_product()
         record = factories.create_stockrecord(
-            product, price_excl_tax=D('5.00'))
+            product, price=D('5.00'))
         self.assertEqual(0, self.basket.line_quantity(
             product, record))
 
     def test_returns_correct_quantity_for_existing_product_and_stockrecord_and_options(self):
         product = factories.create_product()
         record = factories.create_stockrecord(
-            product, price_excl_tax=D('5.00'))
+            product, price=D('5.00'))
         option = Option.objects.create(name="Message")
         options = [{"option": option, "value": "2"}]
 
@@ -198,7 +198,7 @@ class TestANonEmptyBasket(TestCase):
     def test_total_sums_product_totals(self):
         product = factories.create_product()
         factories.create_stockrecord(
-            product, price_excl_tax=D('5.00'))
+            product, price=D('5.00'))
         self.basket.add(product, 1)
         self.assertEqual(self.basket.total_excl_tax, 105)
 
@@ -208,7 +208,7 @@ class TestANonEmptyBasket(TestCase):
         # Add a zero-priced product to the basket
         product = factories.create_product()
         factories.create_stockrecord(
-            product, price_excl_tax=D('0.00'), num_in_stock=10)
+            product, price=D('0.00'), num_in_stock=10)
         basket.add(product, 1)
 
         self.assertEqual(basket.lines.count(), 1)
@@ -218,7 +218,7 @@ class TestANonEmptyBasket(TestCase):
     def test_basket_prices_calculation_for_unavailable_pricing(self):
         new_product = factories.create_product()
         factories.create_stockrecord(
-            new_product, price_excl_tax=D('5.00'))
+            new_product, price=D('5.00'))
         self.basket.add(new_product, 1)
 
         class UnavailableProductStrategy(strategy.Default):
@@ -227,16 +227,16 @@ class TestANonEmptyBasket(TestCase):
             def availability_policy(self, product, stockrecord):
                 if product == new_product:
                     return availability.Unavailable()
-                return super(UnavailableProductStrategy, self).availability_policy(product, stockrecord)
+                return super().availability_policy(product, stockrecord)
 
             def pricing_policy(self, product, stockrecord):
                 if product == new_product:
                     return prices.Unavailable()
-                return super(UnavailableProductStrategy, self).pricing_policy(product, stockrecord)
+                return super().pricing_policy(product, stockrecord)
 
         self.basket.strategy = UnavailableProductStrategy()
         line = self.basket.all_lines()[1]
-        self.assertEqual(line.get_warning(), u"'D\xf9\uff4d\u03fb\u03d2 title' is no longer available")
+        self.assertEqual(line.get_warning(), "'D\xf9\uff4d\u03fb\u03d2 title' is no longer available")
         self.assertIsNone(line.line_price_excl_tax)
         self.assertIsNone(line.line_price_incl_tax)
         self.assertIsNone(line.line_price_excl_tax_incl_discounts)
@@ -288,7 +288,7 @@ class TestMergingTwoBaskets(TestCase):
     def setUp(self):
         self.product = factories.create_product()
         self.record = factories.create_stockrecord(
-            self.product, price_excl_tax=D('10.00'))
+            self.product, price=D('10.00'))
         self.purchase_info = factories.create_purchase_info(self.record)
 
         self.main_basket = Basket()

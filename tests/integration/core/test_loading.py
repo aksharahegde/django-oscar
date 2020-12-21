@@ -1,14 +1,13 @@
-from os.path import dirname
 import sys
+from os.path import dirname
 
-from django.test import override_settings, TestCase
+from django.apps import AppConfig, apps
 from django.conf import settings
+from django.test import TestCase, override_settings
 
-import oscar
 from oscar.core.loading import (
-    get_model, AppNotFoundError, get_classes, get_class, get_class_loader,
-    ClassNotFoundError)
-from oscar.test.factories import create_product, WishListFactory, UserFactory
+    AppNotFoundError, ClassNotFoundError, get_class, get_class_loader,
+    get_classes, get_model)
 from tests import temporary_python_path
 from tests._site.loader import DummyClass
 
@@ -41,26 +40,34 @@ class TestClassLoading(TestCase):
 
     def test_raise_importerror_if_app_raises_importerror(self):
         """
-        This tests that Oscar doesn't fall back to using the Oscar catalogue
-        app if the overriding app throws an ImportError.
+        This tests that Oscar doesn't fall back to using the Oscar core
+        app class if the overriding app class throws an ImportError.
+
+        "get_class()" returns None in this case, since there is no such named
+        class in the core app. We use this fictitious class because classes in
+        the "models" and "views" modules (along with modules they are related
+        to) are imported as part of the Django app-loading process, which is
+        triggered when we override the INSTALLED_APPS setting.
         """
         apps = list(settings.INSTALLED_APPS)
-        apps[apps.index('oscar.apps.catalogue')] = 'tests._site.import_error_app.catalogue'
+        replaced_app_idx = apps.index('tests._site.apps.catalogue.apps.CatalogueConfig')
+        apps[replaced_app_idx] = 'tests._site.import_error_app.catalogue.apps.CatalogueConfig'
         with override_settings(INSTALLED_APPS=apps):
             with self.assertRaises(ImportError):
-                get_class('catalogue.app', 'CatalogueApplication')
+                get_class('catalogue.import_error_module', 'ImportErrorClass')
 
 
 class ClassLoadingWithLocalOverrideTests(TestCase):
 
     def setUp(self):
         self.installed_apps = list(settings.INSTALLED_APPS)
-        self.installed_apps[self.installed_apps.index('oscar.apps.shipping')] = 'tests._site.shipping'
+        replaced_app_idx = self.installed_apps.index('oscar.apps.shipping.apps.ShippingConfig')
+        self.installed_apps[replaced_app_idx] = 'tests._site.apps.shipping.apps.ShippingConfig'
 
     def test_loading_class_defined_in_local_module(self):
         with override_settings(INSTALLED_APPS=self.installed_apps):
             (Free,) = get_classes('shipping.methods', ('Free',))
-            self.assertEqual('tests._site.shipping.methods', Free.__module__)
+            self.assertEqual('tests._site.apps.shipping.methods', Free.__module__)
 
     def test_loading_class_which_is_not_defined_in_local_module(self):
         with override_settings(INSTALLED_APPS=self.installed_apps):
@@ -75,26 +82,27 @@ class ClassLoadingWithLocalOverrideTests(TestCase):
     def test_loading_classes_defined_in_both_local_and_oscar_modules(self):
         with override_settings(INSTALLED_APPS=self.installed_apps):
             (Free, FixedPrice) = get_classes('shipping.methods', ('Free', 'FixedPrice'))
-            self.assertEqual('tests._site.shipping.methods', Free.__module__)
+            self.assertEqual('tests._site.apps.shipping.methods', Free.__module__)
             self.assertEqual('oscar.apps.shipping.methods', FixedPrice.__module__)
 
     def test_loading_classes_with_root_app(self):
         import tests._site.shipping
         path = dirname(dirname(tests._site.shipping.__file__))
         with temporary_python_path([path]):
-            self.installed_apps[
-                self.installed_apps.index('tests._site.shipping')] = 'shipping'
+            replaced_app_idx = self.installed_apps.index('tests._site.apps.shipping.apps.ShippingConfig')
+            self.installed_apps[replaced_app_idx] = 'shipping.apps.ShippingConfig'
             with override_settings(INSTALLED_APPS=self.installed_apps):
                 (Free,) = get_classes('shipping.methods', ('Free',))
                 self.assertEqual('shipping.methods', Free.__module__)
 
     def test_overriding_view_is_possible_without_overriding_app(self):
-        from oscar.apps.customer.app import application, CustomerApplication
         # If test fails, it's helpful to know if it's caused by order of
         # execution
-        self.assertEqual(CustomerApplication().summary_view.__module__,
+        customer_app_config = AppConfig.create('oscar.apps.customer')
+        customer_app_config.ready()
+        self.assertEqual(customer_app_config.summary_view.__module__,
                          'tests._site.apps.customer.views')
-        self.assertEqual(application.summary_view.__module__,
+        self.assertEqual(apps.get_app_config('customer').summary_view.__module__,
                          'tests._site.apps.customer.views')
 
 
@@ -102,33 +110,13 @@ class ClassLoadingWithLocalOverrideWithMultipleSegmentsTests(TestCase):
 
     def setUp(self):
         self.installed_apps = list(settings.INSTALLED_APPS)
-        self.installed_apps[self.installed_apps.index('oscar.apps.shipping')] = 'tests._site.apps.shipping'
+        replaced_app_idx = self.installed_apps.index('oscar.apps.shipping.apps.ShippingConfig')
+        self.installed_apps[replaced_app_idx] = 'tests._site.apps.shipping.apps.ShippingConfig'
 
     def test_loading_class_defined_in_local_module(self):
         with override_settings(INSTALLED_APPS=self.installed_apps):
             (Free,) = get_classes('shipping.methods', ('Free',))
             self.assertEqual('tests._site.apps.shipping.methods', Free.__module__)
-
-
-class TestGetCoreAppsFunction(TestCase):
-    """
-    oscar.get_core_apps function
-    """
-
-    def test_returns_core_apps_when_no_overrides_specified(self):
-        apps = oscar.get_core_apps()
-        self.assertEqual(oscar.OSCAR_CORE_APPS, apps)
-
-    def test_uses_non_dashboard_override_when_specified(self):
-        apps = oscar.get_core_apps(overrides=['apps.shipping'])
-        self.assertTrue('apps.shipping' in apps)
-        self.assertTrue('oscar.apps.shipping' not in apps)
-
-    def test_uses_dashboard_override_when_specified(self):
-        apps = oscar.get_core_apps(overrides=['apps.dashboard.catalogue'])
-        self.assertTrue('apps.dashboard.catalogue' in apps)
-        self.assertTrue('oscar.apps.dashboard.catalogue' not in apps)
-        self.assertTrue('oscar.apps.catalogue' in apps)
 
 
 class TestOverridingCoreApps(TestCase):
@@ -175,70 +163,18 @@ class TestDynamicLoadingOn3rdPartyApps(TestCase):
         sys.path.remove('./tests/_site/')
 
     def test_load_core_3rd_party_class_correctly(self):
-        self.installed_apps.append('thirdparty_package.apps.myapp')
+        self.installed_apps.append('thirdparty_package.apps.myapp.apps.MyAppConfig')
         with override_settings(INSTALLED_APPS=self.installed_apps):
             Cow, Goat = get_classes('myapp.models', ('Cow', 'Goat'), self.core_app_prefix)
             self.assertEqual('thirdparty_package.apps.myapp.models', Cow.__module__)
             self.assertEqual('thirdparty_package.apps.myapp.models', Goat.__module__)
 
     def test_load_overriden_3rd_party_class_correctly(self):
-        self.installed_apps.append('apps.myapp')
+        self.installed_apps.append('tests._site.apps.myapp.apps.TestConfig')
         with override_settings(INSTALLED_APPS=self.installed_apps):
             Cow, Goat = get_classes('myapp.models', ('Cow', 'Goat'), self.core_app_prefix)
             self.assertEqual('thirdparty_package.apps.myapp.models', Cow.__module__)
-            self.assertEqual('apps.myapp.models', Goat.__module__)
-
-
-class TestMovedClasses(TestCase):
-    def setUp(self):
-        user = UserFactory()
-        product = create_product()
-        self.wishlist = WishListFactory(owner=user)
-        self.wishlist.add(product)
-
-    def test_load_formset_old_destination(self):
-        BaseBasketLineFormSet = get_class('basket.forms', 'BaseBasketLineFormSet')
-        self.assertEqual('oscar.apps.basket.formsets', BaseBasketLineFormSet.__module__)
-        StockRecordFormSet = get_class('dashboard.catalogue.forms', 'StockRecordFormSet')
-        self.assertEqual('oscar.apps.dashboard.catalogue.formsets', StockRecordFormSet.__module__)
-        OrderedProductFormSet = get_class('dashboard.promotions.forms', 'OrderedProductFormSet')
-        OrderedProductForm = get_class('dashboard.promotions.forms', 'OrderedProductForm')
-        # Since OrderedProductFormSet created with metaclass, it has __module__
-        # attribute pointing to the Django module. Thus, we test if formset was
-        # loaded correctly by initiating class instance and checking its forms.
-        self.assertTrue(isinstance(OrderedProductFormSet().forms[0], OrderedProductForm))
-        LineFormset = get_class('wishlists.forms', 'LineFormset')
-        WishListLineForm = get_class('wishlists.forms', 'WishListLineForm')
-        self.assertTrue(isinstance(LineFormset(instance=self.wishlist).forms[0], WishListLineForm))
-
-    def test_load_formset_new_destination(self):
-        BaseBasketLineFormSet = get_class('basket.formsets', 'BaseBasketLineFormSet')
-        self.assertEqual('oscar.apps.basket.formsets', BaseBasketLineFormSet.__module__)
-        StockRecordFormSet = get_class('dashboard.catalogue.formsets', 'StockRecordFormSet')
-        self.assertEqual('oscar.apps.dashboard.catalogue.formsets', StockRecordFormSet.__module__)
-        OrderedProductFormSet = get_class('dashboard.promotions.formsets', 'OrderedProductFormSet')
-        OrderedProductForm = get_class('dashboard.promotions.forms', 'OrderedProductForm')
-        self.assertTrue(isinstance(OrderedProductFormSet().forms[0], OrderedProductForm))
-        LineFormset = get_class('wishlists.formsets', 'LineFormset')
-        WishListLineForm = get_class('wishlists.forms', 'WishListLineForm')
-        self.assertTrue(isinstance(LineFormset(instance=self.wishlist).forms[0], WishListLineForm))
-
-    def test_load_formsets_mixed_destination(self):
-        BaseBasketLineFormSet, BasketLineForm = get_classes('basket.forms', ('BaseBasketLineFormSet', 'BasketLineForm'))
-        self.assertEqual('oscar.apps.basket.formsets', BaseBasketLineFormSet.__module__)
-        self.assertEqual('oscar.apps.basket.forms', BasketLineForm.__module__)
-        StockRecordForm, StockRecordFormSet = get_classes(
-            'dashboard.catalogue.forms', ('StockRecordForm', 'StockRecordFormSet')
-        )
-        self.assertEqual('oscar.apps.dashboard.catalogue.forms', StockRecordForm.__module__)
-        OrderedProductForm, OrderedProductFormSet = get_classes(
-            'dashboard.promotions.forms', ('OrderedProductForm', 'OrderedProductFormSet')
-        )
-        self.assertEqual('oscar.apps.dashboard.promotions.forms', OrderedProductForm.__module__)
-        self.assertTrue(isinstance(OrderedProductFormSet().forms[0], OrderedProductForm))
-        LineFormset, WishListLineForm = get_classes('wishlists.forms', ('LineFormset', 'WishListLineForm'))
-        self.assertEqual('oscar.apps.wishlists.forms', WishListLineForm.__module__)
-        self.assertTrue(isinstance(LineFormset(instance=self.wishlist).forms[0], WishListLineForm))
+            self.assertEqual('tests._site.apps.myapp.models', Goat.__module__)
 
 
 class OverriddenClassLoadingTestCase(TestCase):

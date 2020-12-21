@@ -14,15 +14,15 @@ class FacetedSearchView(views.FacetedSearchView):
     Note that facets are configured when the ``SearchQuerySet`` is initialised.
     This takes place in the search application class.
 
-    See https://django-haystack.readthedocs.io/en/v2.1.0/views_and_forms.html#facetedsearchform # noqa
-    """
+    See https://django-haystack.readthedocs.io/en/v2.1.0/views_and_forms.html#facetedsearchform
+    """  # noqa
 
     # Haystack uses a different class attribute to CBVs
-    template = "search/results.html"
+    template = "oscar/search/results.html"
     search_signal = user_search
 
     def __call__(self, request):
-        response = super(FacetedSearchView, self).__call__(request)
+        response = super().__call__(request)
 
         # Raise a signal for other apps to hook into for analytics
         self.search_signal.send(
@@ -35,7 +35,7 @@ class FacetedSearchView(views.FacetedSearchView):
     # convert Haystack's default facet data into a more useful structure so we
     # have to do less work in the template.
     def extra_context(self):
-        extra = super(FacetedSearchView, self).extra_context()
+        extra = super().extra_context()
 
         # Show suggestion no matter what.  Haystack 2.1 only shows a suggestion
         # if there are some results, which seems a bit weird to me.
@@ -65,4 +65,4 @@ class FacetedSearchView(views.FacetedSearchView):
     def get_results(self):
         # We're only interested in products (there might be other content types
         # in the Solr index).
-        return super(FacetedSearchView, self).get_results().models(Product)
+        return super().get_results().models(Product)

@@ -8,30 +8,22 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ValidationError
 from django.utils.crypto import get_random_string
-from django.utils.http import is_safe_url
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from oscar.apps.customer.utils import get_password_reset_url, normalise_email
 from oscar.core.compat import (
-    existing_user_fields, get_user_model)
-from oscar.core.decorators import deprecated
+    existing_user_fields, get_user_model, url_has_allowed_host_and_scheme)
 from oscar.core.loading import get_class, get_model, get_profile_class
 from oscar.forms import widgets
 
-Dispatcher = get_class('customer.utils', 'Dispatcher')
-CommunicationEventType = get_model('customer', 'communicationeventtype')
+CustomerDispatcher = get_class('customer.utils', 'CustomerDispatcher')
 ProductAlert = get_model('customer', 'ProductAlert')
 User = get_user_model()
 
 
 def generate_username():
-    # Python 3 uses ascii_letters. If not available, fallback to letters
-    try:
-        letters = string.ascii_letters
-    except AttributeError:
-        letters = string.letters
-
+    letters = string.ascii_letters
     allowed_chars = letters + string.digits + '_'
     uname = get_random_string(length=30, allowed_chars=allowed_chars)
     try:
@@ -43,12 +35,10 @@ def generate_username():
 
 class PasswordResetForm(auth_forms.PasswordResetForm):
     """
-    This form takes the same structure as its parent from django.contrib.auth
+    This form takes the same structure as its parent from :py:mod:`django.contrib.auth`
     """
-    communication_type_code = "PASSWORD_RESET"
 
-    def save(self, domain_override=None, use_https=False, request=None,
-             **kwargs):
+    def save(self, domain_override=None, request=None, **kwargs):
         """
         Generates a one-use only link for resetting password and sends to the
         user.
@@ -56,51 +46,23 @@ class PasswordResetForm(auth_forms.PasswordResetForm):
         site = get_current_site(request)
         if domain_override is not None:
             site.domain = site.name = domain_override
-        email = self.cleaned_data['email']
-        active_users = User._default_manager.filter(
-            email__iexact=email, is_active=True)
-        for user in active_users:
-            reset_url = self.get_reset_url(site, request, user, use_https)
-            ctx = {
-                'user': user,
-                'site': site,
-                'reset_url': reset_url}
-            messages = CommunicationEventType.objects.get_and_render(
-                code=self.communication_type_code, context=ctx)
-            Dispatcher().dispatch_user_messages(user, messages)
+        for user in self.get_users(self.cleaned_data['email']):
+            self.send_password_reset_email(site, user)
 
-    def get_reset_url(self, site, request, user, use_https):
-        # the request argument isn't used currently, but implementors might
-        # need it to determine the correct subdomain
-        reset_url = "%s://%s%s" % (
-            'https' if use_https else 'http',
-            site.domain,
-            get_password_reset_url(user))
-
-        return reset_url
-
-
-@deprecated
-class SetPasswordForm(auth_forms.SetPasswordForm):
-    """
-    Deprecated - use django.contrib.auth.forms.SetPasswordForm instead.
-    """
-    pass
-
-
-@deprecated
-class PasswordChangeForm(auth_forms.PasswordChangeForm):
-    """
-    Deprecated - use django.contrib.auth.forms.PasswordChangeForm instead.
-    """
-    pass
+    def send_password_reset_email(self, site, user):
+        extra_context = {
+            'user': user,
+            'site': site,
+            'reset_url': get_password_reset_url(user),
+        }
+        CustomerDispatcher().send_password_reset_email_for_user(user, extra_context)
 
 
 class EmailAuthenticationForm(AuthenticationForm):
     """
     Extends the standard django AuthenticationForm, to support 75 character
     usernames. 75 character usernames are needed to support the EmailOrUsername
-    auth backend.
+    authentication backend.
     """
     username = forms.EmailField(label=_('Email address'))
     redirect_url = forms.CharField(
@@ -108,11 +70,11 @@ class EmailAuthenticationForm(AuthenticationForm):
 
     def __init__(self, host, *args, **kwargs):
         self.host = host
-        super(EmailAuthenticationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def clean_redirect_url(self):
         url = self.cleaned_data['redirect_url'].strip()
-        if url and is_safe_url(url, self.host):
+        if url and url_has_allowed_host_and_scheme(url, self.host):
             return url
 
 
@@ -120,12 +82,12 @@ class ConfirmPasswordForm(forms.Form):
     """
     Extends the standard django AuthenticationForm, to support 75 character
     usernames. 75 character usernames are needed to support the EmailOrUsername
-    auth backend.
+    authentication backend.
     """
     password = forms.CharField(label=_("Password"), widget=forms.PasswordInput)
 
     def __init__(self, user, *args, **kwargs):
-        super(ConfirmPasswordForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.user = user
 
     def clean_password(self):
@@ -151,7 +113,19 @@ class EmailUserCreationForm(forms.ModelForm):
 
     def __init__(self, host=None, *args, **kwargs):
         self.host = host
-        super(EmailUserCreationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+
+    def _post_clean(self):
+        super()._post_clean()
+        password = self.cleaned_data.get('password2')
+        # Validate after self.instance is updated with form data
+        # otherwise validators can't access email
+        # see django.contrib.auth.forms.UserCreationForm
+        if password:
+            try:
+                validate_password(password, self.instance)
+            except forms.ValidationError as error:
+                self.add_error('password2', error)
 
     def clean_email(self):
         """
@@ -169,17 +143,16 @@ class EmailUserCreationForm(forms.ModelForm):
         if password1 != password2:
             raise forms.ValidationError(
                 _("The two password fields didn't match."))
-        validate_password(password2, self.instance)
         return password2
 
     def clean_redirect_url(self):
         url = self.cleaned_data['redirect_url'].strip()
-        if url and is_safe_url(url, self.host):
+        if url and url_has_allowed_host_and_scheme(url, self.host):
             return url
         return settings.LOGIN_REDIRECT_URL
 
     def save(self, commit=True):
-        user = super(EmailUserCreationForm, self).save(commit=False)
+        user = super().save(commit=False)
         user.set_password(self.cleaned_data['password1'])
 
         if 'username' in [f.name for f in User._meta.fields]:
@@ -203,7 +176,7 @@ class OrderSearchForm(forms.Form):
                                         self.cleaned_data['date_to'],
                                         self.cleaned_data['order_number']]):
             raise forms.ValidationError(_("At least one field is required."))
-        return super(OrderSearchForm, self).clean()
+        return super().clean()
 
     def description(self):
         """
@@ -271,15 +244,15 @@ class UserForm(forms.ModelForm):
     def __init__(self, user, *args, **kwargs):
         self.user = user
         kwargs['instance'] = user
-        super(UserForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if 'email' in self.fields:
             self.fields['email'].required = True
 
     def clean_email(self):
         """
-        Make sure that the email address is aways unique as it is
+        Make sure that the email address is always unique as it is
         used instead of the username. This is necessary because the
-        unique-ness of email addresses is *not* enforced on the model
+        uniqueness of email addresses is *not* enforced on the model
         level in ``django.contrib.auth.models.User``.
         """
         email = normalise_email(self.cleaned_data['email'])
@@ -308,7 +281,7 @@ if Profile:  # noqa (too complex (12))
                 instance = Profile(user=user)
             kwargs['instance'] = instance
 
-            super(UserAndProfileForm, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
 
             # Get profile field names to help with ordering later
             profile_field_names = list(self.fields.keys())
@@ -361,7 +334,7 @@ if Profile:  # noqa (too complex (12))
                 setattr(user, field_name, self.cleaned_data[field_name])
             user.save()
 
-            return super(ProfileForm, self).save(*args, **kwargs)
+            return super().save(*args, **kwargs)
 
     ProfileForm = UserAndProfileForm
 else:
@@ -369,7 +342,7 @@ else:
 
 
 class ProductAlertForm(forms.ModelForm):
-    email = forms.EmailField(required=True, label=_(u'Send notification to'),
+    email = forms.EmailField(required=True, label=_('Send notification to'),
                              widget=forms.TextInput(attrs={
                                  'placeholder': _('Enter your email')
                              }))
@@ -377,7 +350,7 @@ class ProductAlertForm(forms.ModelForm):
     def __init__(self, user, product, *args, **kwargs):
         self.user = user
         self.product = product
-        super(ProductAlertForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Only show email field to unauthenticated users
         if user and user.is_authenticated:
@@ -385,7 +358,7 @@ class ProductAlertForm(forms.ModelForm):
             self.fields['email'].required = False
 
     def save(self, commit=True):
-        alert = super(ProductAlertForm, self).save(commit=False)
+        alert = super().save(commit=False)
         if self.user.is_authenticated:
             alert.user = self.user
         alert.product = self.product

@@ -1,7 +1,7 @@
-import os
 
-# Use 'dev', 'beta', or 'final' as the 4th element to indicate release type.
-VERSION = (1, 6, 4, 'final')
+import os
+# Use 'alpha', 'beta', 'rc' or 'final' as the 4th element to indicate release type.
+VERSION = (3, 0, 0, 'beta', 1)
 
 
 def get_short_version():
@@ -14,84 +14,60 @@ def get_version():
     if VERSION[2]:
         version = '%s.%s' % (version, VERSION[2])
     elif VERSION[3] != 'final':
-        version = '%s %s' % (version, VERSION[3])
+        mapping = {'alpha': 'a', 'beta': 'b', 'rc': 'c'}
+        version = '%s%s' % (version, mapping[VERSION[3]])
         if len(VERSION) == 5:
-            version = '%s %s' % (version, VERSION[4])
+            version = '%s%s' % (version, VERSION[4])
     return version
 
 
-# Cheeky setting that allows each template to be accessible by two paths.
-# Eg: the template 'oscar/templates/oscar/base.html' can be accessed via both
-# 'base.html' and 'oscar/base.html'.  This allows Oscar's templates to be
-# extended by templates with the same filename
-OSCAR_MAIN_TEMPLATE_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 'templates/oscar')
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'django.contrib.sites',
+    'django.contrib.flatpages',
 
-OSCAR_CORE_APPS = [
-    'oscar',
-    'oscar.apps.analytics',
-    'oscar.apps.checkout',
-    'oscar.apps.address',
-    'oscar.apps.shipping',
-    'oscar.apps.catalogue',
-    'oscar.apps.catalogue.reviews',
-    'oscar.apps.partner',
-    'oscar.apps.basket',
-    'oscar.apps.payment',
-    'oscar.apps.offer',
-    'oscar.apps.order',
-    'oscar.apps.customer',
-    'oscar.apps.promotions',
-    'oscar.apps.search',
-    'oscar.apps.voucher',
-    'oscar.apps.wishlists',
-    'oscar.apps.dashboard',
-    'oscar.apps.dashboard.reports',
-    'oscar.apps.dashboard.users',
-    'oscar.apps.dashboard.orders',
-    'oscar.apps.dashboard.promotions',
-    'oscar.apps.dashboard.catalogue',
-    'oscar.apps.dashboard.offers',
-    'oscar.apps.dashboard.partners',
-    'oscar.apps.dashboard.pages',
-    'oscar.apps.dashboard.ranges',
-    'oscar.apps.dashboard.reviews',
-    'oscar.apps.dashboard.vouchers',
-    'oscar.apps.dashboard.communications',
-    'oscar.apps.dashboard.shipping',
+    'oscar.config.Shop',
+    'oscar.apps.analytics.apps.AnalyticsConfig',
+    'oscar.apps.checkout.apps.CheckoutConfig',
+    'oscar.apps.address.apps.AddressConfig',
+    'oscar.apps.shipping.apps.ShippingConfig',
+    'oscar.apps.catalogue.apps.CatalogueConfig',
+    'oscar.apps.catalogue.reviews.apps.CatalogueReviewsConfig',
+    'oscar.apps.communication.apps.CommunicationConfig',
+    'oscar.apps.partner.apps.PartnerConfig',
+    'oscar.apps.basket.apps.BasketConfig',
+    'oscar.apps.payment.apps.PaymentConfig',
+    'oscar.apps.offer.apps.OfferConfig',
+    'oscar.apps.order.apps.OrderConfig',
+    'oscar.apps.customer.apps.CustomerConfig',
+    'oscar.apps.search.apps.SearchConfig',
+    'oscar.apps.voucher.apps.VoucherConfig',
+    'oscar.apps.wishlists.apps.WishlistsConfig',
+    'oscar.apps.dashboard.apps.DashboardConfig',
+    'oscar.apps.dashboard.reports.apps.ReportsDashboardConfig',
+    'oscar.apps.dashboard.users.apps.UsersDashboardConfig',
+    'oscar.apps.dashboard.orders.apps.OrdersDashboardConfig',
+    'oscar.apps.dashboard.catalogue.apps.CatalogueDashboardConfig',
+    'oscar.apps.dashboard.offers.apps.OffersDashboardConfig',
+    'oscar.apps.dashboard.partners.apps.PartnersDashboardConfig',
+    'oscar.apps.dashboard.pages.apps.PagesDashboardConfig',
+    'oscar.apps.dashboard.ranges.apps.RangesDashboardConfig',
+    'oscar.apps.dashboard.reviews.apps.ReviewsDashboardConfig',
+    'oscar.apps.dashboard.vouchers.apps.VouchersDashboardConfig',
+    'oscar.apps.dashboard.communications.apps.CommunicationsDashboardConfig',
+    'oscar.apps.dashboard.shipping.apps.ShippingDashboardConfig',
+
     # 3rd-party apps that oscar depends on
+    'widget_tweaks',
     'haystack',
     'treebeard',
-    'sorl.thumbnail',
     'django_tables2',
 ]
 
 
-def get_core_apps(overrides=None):
-    """
-    Return a list of oscar's apps amended with any passed overrides
-    """
-    if not overrides:
-        return OSCAR_CORE_APPS
-
-    # Conservative import to ensure that this file can be loaded
-    # without the presence Django.
-    from django.utils import six
-    if isinstance(overrides, six.string_types):
-        raise ValueError(
-            "get_core_apps expects a list or tuple of apps "
-            "to override")
-
-    def get_app_label(app_label, overrides):
-        pattern = app_label.replace('oscar.apps.', '')
-        for override in overrides:
-            if override.endswith(pattern):
-                if 'dashboard' in override and 'dashboard' not in pattern:
-                    continue
-                return override
-        return app_label
-
-    apps = []
-    for app_label in OSCAR_CORE_APPS:
-        apps.append(get_app_label(app_label, overrides))
-    return apps
+default_app_config = 'oscar.config.Shop'

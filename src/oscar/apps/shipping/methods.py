@@ -1,6 +1,6 @@
 from decimal import Decimal as D
 
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core import prices
 
@@ -9,22 +9,21 @@ class Base(object):
     """
     Shipping method interface class
 
-    This is the superclass to the classes in methods.py, and a de-facto
-    superclass to the classes in models.py. This allows using all
-    shipping methods interchangeably (aka polymorphism).
+    This is the superclass to the classes in this module. This allows
+    using all shipping methods interchangeably (aka polymorphism).
 
     The interface is all properties.
     """
 
     #: Used to store this method in the session.  Each shipping method should
-    #  have a unique code.
+    #:  have a unique code.
     code = '__default__'
 
     #: The name of the shipping method, shown to the customer during checkout
     name = 'Default shipping'
 
     #: A more detailed description of the shipping method shown to the customer
-    #  during checkout.  Can contain HTML.
+    #:  during checkout.  Can contain HTML.
     description = ''
 
     #: Whether the charge includes a discount
@@ -34,7 +33,7 @@ class Base(object):
         """
         Return the shipping charge for the given basket
         """
-        raise NotImplemented()
+        raise NotImplementedError
 
     def discount(self, basket):
         """
@@ -64,7 +63,7 @@ class Free(Base):
 class NoShippingRequired(Free):
     """
     This is a special shipping method that indicates that no shipping is
-    actually required (eg for digital goods).
+    actually required (e.g. for digital goods).
     """
     code = 'no-shipping-required'
     name = _('No shipping required')
@@ -111,21 +110,37 @@ class OfferDiscount(Base):
 
     @property
     def code(self):
+        """
+        Returns the :py:attr:`code <oscar.apps.shipping.methods.Base.code>` of the wrapped shipping method.
+        """
         return self.method.code
 
     @property
     def name(self):
+        """
+        Returns the :py:attr:`name <oscar.apps.shipping.methods.Base.name>` of the wrapped shipping method.
+        """
         return self.method.name
 
     @property
     def discount_name(self):
+        """
+        Returns the :py:attr:`name <oscar.apps.offer.abstract_models.BaseOfferMixin.name>` of the applied Offer.
+        """
         return self.offer.name
 
     @property
     def description(self):
+        """
+        Returns the :py:attr:`description <.Base.description>` of the wrapped shipping method.
+        """
         return self.method.description
 
     def calculate_excl_discount(self, basket):
+        """
+        Returns the shipping charge for the given basket without
+        discount applied.
+        """
         return self.method.calculate(basket)
 
 
@@ -136,7 +151,7 @@ class TaxExclusiveOfferDiscount(OfferDiscount):
 
     def calculate(self, basket):
         base_charge = self.method.calculate(basket)
-        discount = self.offer.shipping_discount(base_charge.excl_tax)
+        discount = self.offer.shipping_discount(base_charge.excl_tax, base_charge.currency)
         excl_tax = base_charge.excl_tax - discount
         return prices.Price(
             currency=base_charge.currency,
@@ -144,7 +159,7 @@ class TaxExclusiveOfferDiscount(OfferDiscount):
 
     def discount(self, basket):
         base_charge = self.method.calculate(basket)
-        return self.offer.shipping_discount(base_charge.excl_tax)
+        return self.offer.shipping_discount(base_charge.excl_tax, base_charge.currency)
 
 
 class TaxInclusiveOfferDiscount(OfferDiscount):
@@ -154,7 +169,7 @@ class TaxInclusiveOfferDiscount(OfferDiscount):
 
     def calculate(self, basket):
         base_charge = self.method.calculate(basket)
-        discount = self.offer.shipping_discount(base_charge.incl_tax)
+        discount = self.offer.shipping_discount(base_charge.incl_tax, base_charge.currency)
         incl_tax = base_charge.incl_tax - discount
         excl_tax = self.calculate_excl_tax(base_charge, incl_tax)
         return prices.Price(
@@ -175,4 +190,4 @@ class TaxInclusiveOfferDiscount(OfferDiscount):
 
     def discount(self, basket):
         base_charge = self.method.calculate(basket)
-        return self.offer.shipping_discount(base_charge.incl_tax)
+        return self.offer.shipping_discount(base_charge.incl_tax, base_charge.currency)

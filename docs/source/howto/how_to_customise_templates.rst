@@ -20,7 +20,7 @@ Say you want to customise ``base.html``.  First you need a project-specific
 templates directory that comes first in the include path.  You can set this up
 as so::
 
-    
+
 
     import os
     location = lambda x: os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', x)
@@ -62,35 +62,6 @@ This basically means you can have a ``base.html`` in your local templates folder
 that extends Oscar's ``base.html`` but only customises the blocks that it needs
 to.
 
-Oscar provides a helper variable to make this easy.  First, set up your
-template configuration as so::
-
-    import os
-    from oscar import OSCAR_MAIN_TEMPLATE_DIR
-    location = lambda x: os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', x)
-
-    TEMPLATES = [
-        {
-            'BACKEND': 'django.template.backends.django.DjangoTemplates',
-            'DIRS': [
-                location('templates'), # templates directory of the project
-                OSCAR_MAIN_TEMPLATE_DIR,
-            ],
-            'APP_DIRS': True,
-            'OPTIONS': {
-                'context_processors': [
-                    'django.template.context_processors.debug',
-                    ...
-                    'oscar.core.context_processors.metadata',
-                ],
-            },
-        },
-    ]
-
-The ``OSCAR_MAIN_TEMPLATE_DIR`` points to the directory above Oscar's normal
-templates directory.  This means that ``path/to/oscar/template.html`` can also
-be reached via ``templates/path/to/oscar/template.html``.
-
 Hence to customise ``base.html``, you can have an implementation like::
 
     # base.html
@@ -107,7 +78,7 @@ Overriding individual products partials
 Apart from overriding ``catalogue/partials/product.html`` to change the look
 for all products, you can also override it for individual product by placing
 templates in ``catalogue/detail-for-upc-%s.html`` or
-``catalogue/detail-for-class-%s.html`` to customize look on product detail
+``catalogue/detail-for-class-%s.html`` to customise look on product detail
 page and ``catalogue/partials/product/upc-%s.html`` or
 ``catalogue/partials/product/class-%s.html`` to tweak product rendering by
 ``{% render_product %}`` template tag , where ``%s`` is the product's UPC
@@ -124,7 +95,7 @@ The main template ``base.html`` has a 'tracking' block which includes a Google
 Analytics partial.  We want to replace this with our own code.  To do this,
 create a new ``base.html`` in your project that subclasses the original::
 
-    # yourproject/templates/base.html
+    # yourproject/templates/oscar/base.html
     {% extends 'oscar/base.html' %}
 
     {% block tracking %}

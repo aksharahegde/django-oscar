@@ -1,4 +1,4 @@
-{% extends 'dashboard/layout.html' %}
+{% extends 'oscar/dashboard/layout.html' %}
 
 {% load currency_filters %}
 
@@ -16,24 +16,20 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<ul class="breadcrumb">
-    <li>
-        <a href="{% url 'dashboard:index' %}">{% trans "Dashboard" %}</a>
-    </li>
-    <li>
-        <a href="{% url 'dashboard:offer-list' %}">{% trans "Offers" %}</a>
-    </li>
-    {% if offer.pk %}
-    <li>
-        <a href="{% url 'dashboard:offer-detail' pk=offer.pk %}">{{ offer.name }}</a>
-    </li>
-    {% else %}
-    <li>
-        {% trans "Create new offer" %}
-    </li>
-    {% endif %}
-    <li class="active">{{ title }}</li>
-</ul>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:index' %}">{% trans "Dashboard" %}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'dashboard:offer-list' %}">{% trans "Offers" %}</a></li>
+            {% if offer.pk %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'dashboard:offer-detail' pk=offer.pk %}">{{ offer.name }}</a>
+                </li>
+            {% else %}
+                <li class="breadcrumb-item">{% trans "Create new offer" %}</li>
+            {% endif %}
+            <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+    </nav>
 {% endblock %}
 
 {% block headertext %}
@@ -48,19 +44,18 @@
     <div class="row">
         <div class="col-md-3">
             {% block progress %}
-                {% include 'dashboard/offers/progress.html' %}
+                {% include 'oscar/dashboard/offers/progress.html' %}
             {% endblock %}
         </div>
         <div class="{% if session_offer %}col-md-6{% else %}col-md-9{% endif %}">
-            <form action="." method="post" class="form-stacked wysiwyg fixed-actions">
+            <form method="post" class="form-stacked wysiwyg fixed-actions">
                 <div class="table-header">
                     <h3>{{ title }}</h3>
                 </div>
-                <div class="well">
+                <div class="card card-body">
                     {% csrf_token %}
-                    <p>{% trans "Fields marked with * are mandatory." %}</p>
                     {% block form_fields %}
-                        {% include "dashboard/partials/form_fields.html" with form=form %}
+                        {% include "oscar/dashboard/partials/form_fields.html" with form=form %}
                     {% endblock %}
                     {% block form_extradata %}{% endblock %}
                 </div>
@@ -69,15 +64,15 @@
 
                     <div class="fixed-actions-group">
                         <div class="form-actions">
-                            <div class="pull-right">
+                            <div class="float-right">
                             {% block form_actions_buttons %}
                                 <button class="btn btn-primary" type="submit" data-loading-text="{% trans 'Submitting...' %}">{% block submittext %}{% trans "Continue" %}{% endblock %}</button>
                                 {% if offer %}{# When editing offer, show saving button #}
-                                    <button class="btn btn-default" name="save" type="submit" data-loading-text="{% trans 'Saving...' %}">{% trans "Save changes" %}</button>
+                                    <button class="btn btn-secondary" name="save" type="submit" data-loading-text="{% trans 'Saving...' %}">{% trans "Save changes" %}</button>
                                 {% endif %}
                             {% endblock %}
                             </div>
-                            <a class="btn btn-default" href="{% url 'dashboard:offer-list' %}">{% trans "cancel" %}</a>
+                            <a class="btn btn-secondary" href="{% url 'dashboard:offer-list' %}">{% trans "cancel" %}</a>
                         </div>
                     </div>
 
@@ -87,7 +82,7 @@
         {% if session_offer %}
         <div class="col-md-3">
             {% block summary %}
-                {% include 'dashboard/offers/summary.html' %}
+                {% include 'oscar/dashboard/offers/summary.html' %}
             {% endblock %}
         </div>
         {% endif %}

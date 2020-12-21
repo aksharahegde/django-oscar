@@ -1,5 +1,5 @@
 from django import forms
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_model
 from oscar.forms import widgets
@@ -31,17 +31,8 @@ class VoucherForm(forms.Form):
         label=_('Which products get a discount?'),
         queryset=Range.objects.all(),
     )
-    type_choices = (
-        (Benefit.PERCENTAGE, _('Percentage off of products in range')),
-        (Benefit.FIXED, _('Fixed amount off of products in range')),
-        (Benefit.SHIPPING_PERCENTAGE,
-         _("Discount is a percentage off of the shipping cost")),
-        (Benefit.SHIPPING_ABSOLUTE,
-         _("Discount is a fixed amount of the shipping cost")),
-        (Benefit.SHIPPING_FIXED_PRICE, _("Get shipping for a fixed price")),
-    )
     benefit_type = forms.ChoiceField(
-        choices=type_choices,
+        choices=Benefit.TYPE_CHOICES,
         label=_('Discount type'),
     )
     benefit_value = forms.DecimalField(
@@ -53,7 +44,7 @@ class VoucherForm(forms.Form):
 
     def __init__(self, voucher=None, *args, **kwargs):
         self.voucher = voucher
-        super(VoucherForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def clean_name(self):
         name = self.cleaned_data['name']
@@ -82,7 +73,7 @@ class VoucherForm(forms.Form):
         return code
 
     def clean(self):
-        cleaned_data = super(VoucherForm, self).clean()
+        cleaned_data = super().clean()
         start_datetime = cleaned_data.get('start_datetime')
         end_datetime = cleaned_data.get('end_datetime')
         if start_datetime and end_datetime and end_datetime < start_datetime:
@@ -122,24 +113,15 @@ class VoucherSetForm(forms.ModelForm):
         label=_('Which products get a discount?'),
         queryset=Range.objects.all(),
     )
-    type_choices = (
-        (Benefit.PERCENTAGE, _('Percentage off of products in range')),
-        (Benefit.FIXED, _('Fixed amount off of products in range')),
-        (Benefit.SHIPPING_PERCENTAGE,
-         _("Discount is a percentage off of the shipping cost")),
-        (Benefit.SHIPPING_ABSOLUTE,
-         _("Discount is a fixed amount of the shipping cost")),
-        (Benefit.SHIPPING_FIXED_PRICE, _("Get shipping for a fixed price")),
-    )
     benefit_type = forms.ChoiceField(
-        choices=type_choices,
+        choices=Benefit.TYPE_CHOICES,
         label=_('Discount type'),
     )
     benefit_value = forms.DecimalField(
         label=_('Discount value'))
 
     def save(self, commit=True):
-        instance = super(VoucherSetForm, self).save(commit)
+        instance = super().save(commit)
         if commit:
             instance.generate_vouchers()
         return instance

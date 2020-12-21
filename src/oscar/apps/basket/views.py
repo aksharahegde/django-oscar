@@ -1,18 +1,18 @@
 from django import shortcuts
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import JsonResponse
+from django.http import JsonResponse, QueryDict
 from django.shortcuts import redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.http import is_safe_url
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, View
 from extra_views import ModelFormSetView
 
 from oscar.apps.basket.signals import (
     basket_addition, voucher_addition, voucher_removal)
 from oscar.core import ajax
+from oscar.core.compat import url_has_allowed_host_and_scheme
 from oscar.core.loading import get_class, get_classes, get_model
 from oscar.core.utils import redirect_to_referrer, safe_referrer
 
@@ -27,6 +27,7 @@ Repository = get_class('shipping.repository', 'Repository')
 OrderTotalCalculator = get_class(
     'checkout.calculators', 'OrderTotalCalculator')
 BasketMessageGenerator = get_class('basket.utils', 'BasketMessageGenerator')
+SurchargeApplicator = get_class("checkout.applicator", "SurchargeApplicator")
 
 
 class BasketView(ModelFormSetView):
@@ -38,14 +39,18 @@ class BasketView(ModelFormSetView):
         'extra': 0,
         'can_delete': True
     }
-    template_name = 'basket/basket.html'
+    template_name = 'oscar/basket/basket.html'
 
     def get_formset_kwargs(self):
-        kwargs = super(BasketView, self).get_formset_kwargs()
+        kwargs = super().get_formset_kwargs()
         kwargs['strategy'] = self.request.strategy
         return kwargs
 
     def get_queryset(self):
+        """
+        Return list of :py:class:`Line <oscar.apps.basket.abstract_models.AbstractLine>`
+        instances associated with the current basket.
+        """  # noqa: E501
         return self.request.basket.all_lines()
 
     def get_shipping_methods(self, basket):
@@ -95,7 +100,7 @@ class BasketView(ModelFormSetView):
         return BasketVoucherForm()
 
     def get_context_data(self, **kwargs):
-        context = super(BasketView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['voucher_form'] = self.get_basket_voucher_form()
 
         # Shipping information is included to give an idea of the total order
@@ -111,9 +116,6 @@ class BasketView(ModelFormSetView):
         if method.is_discounted:
             excl_discount = method.calculate_excl_discount(self.request.basket)
             context['shipping_charge_excl_discount'] = excl_discount
-
-        context['order_total'] = OrderTotalCalculator().calculate(
-            self.request.basket, shipping_charge)
         context['basket_warnings'] = self.get_basket_warnings(
             self.request.basket)
         context['upsell_messages'] = self.get_upsell_messages(
@@ -134,6 +136,13 @@ class BasketView(ModelFormSetView):
                                                queryset=saved_queryset,
                                                prefix='saved')
                     context['saved_formset'] = formset
+
+        surcharges = SurchargeApplicator(self.request, context).get_applicable_surcharges(
+            self.request.basket, shipping_charge=shipping_charge
+        )
+        context['surcharges'] = surcharges
+        context['order_total'] = OrderTotalCalculator().calculate(
+            self.request.basket, shipping_charge, surcharges=surcharges)
         return context
 
     def get_success_url(self):
@@ -151,14 +160,14 @@ class BasketView(ModelFormSetView):
         flash_messages = ajax.FlashMessages()
 
         for form in formset:
-            if (hasattr(form, 'cleaned_data') and
-                    form.cleaned_data['save_for_later']):
+            if (hasattr(form, 'cleaned_data')
+                    and form.cleaned_data.get('save_for_later', False)):
                 line = form.instance
                 if self.request.user.is_authenticated:
                     self.move_line_to_saved_basket(line)
 
                     msg = render_to_string(
-                        'basket/messages/line_saved.html',
+                        'oscar/basket/messages/line_saved.html',
                         {'line': line})
                     flash_messages.info(msg)
 
@@ -174,7 +183,7 @@ class BasketView(ModelFormSetView):
             response = redirect(self.get_success_url())
         else:
             # Save changes to basket as per normal
-            response = super(BasketView, self).formset_valid(formset)
+            response = super().formset_valid(formset)
 
         # If AJAX submission, don't redirect but reload the basket content HTML
         if self.request.is_ajax():
@@ -211,7 +220,7 @@ class BasketView(ModelFormSetView):
 
     def json_response(self, ctx, flash_messages):
         basket_html = render_to_string(
-            'basket/partials/basket_content.html',
+            'oscar/basket/partials/basket_content.html',
             context=ctx, request=self.request)
 
         return JsonResponse({
@@ -225,9 +234,17 @@ class BasketView(ModelFormSetView):
         saved_basket.merge_line(line)
 
     def formset_invalid(self, formset):
+        has_deletion = any(formset._should_delete_form(form) for form in formset.forms)
+        has_no_invalid_non_deletion = all(form.is_valid() or formset._should_delete_form(form)
+                                          for form in formset.forms)
+        if has_deletion:
+            self.remove_deleted_forms(formset)
+            if has_no_invalid_non_deletion:
+                return self.formset_valid(formset)
+
         flash_messages = ajax.FlashMessages()
         flash_messages.warning(_(
-            "Your basket couldn't be updated. "
+            "Your basket has got some issues. "
             "Please correct any validation errors below."))
 
         if self.request.is_ajax():
@@ -236,14 +253,61 @@ class BasketView(ModelFormSetView):
             return self.json_response(ctx, flash_messages)
 
         flash_messages.apply_to_request(self.request)
-        return super(BasketView, self).formset_invalid(formset)
+        return super().formset_invalid(formset)
+
+    def remove_deleted_forms(self, formset):
+        """
+        Removes forms marked for deletion, from the formset, as well as deletes
+        their model instance objects; and modifies the formset's request data,
+        to match the state of the data in the database, for the remaining forms.
+
+        This is useful for redisplaying a formset containing other invalid
+        forms, after deleting one of the forms from it.
+        """
+        form_data = {}
+        form_index = 0
+        for form in formset.forms:
+            # Delete forms marked for deletion, and retain the request data
+            # for the other forms
+            if formset._should_delete_form(form):
+                if form.instance.id is not None:
+                    form.instance.delete()
+            else:
+                old_form_prefix = form.prefix
+                new_form_prefix = formset.add_prefix(form_index)
+                for field_name in form.fields:
+                    form.prefix = old_form_prefix
+                    old_prefixed_field_name = form.add_prefix(field_name)
+                    form.prefix = new_form_prefix
+                    new_prefixed_field_name = form.add_prefix(field_name)
+                    try:
+                        form_data[new_prefixed_field_name] = formset.data[old_prefixed_field_name]
+                    except KeyError:
+                        pass
+                form_index += 1
+        for field_name in formset.management_form.fields:
+            prefixed_field_name = formset.management_form.add_prefix(field_name)
+            if field_name in ['INITIAL_FORMS', 'TOTAL_FORMS']:
+                form_data[prefixed_field_name] = str(form_index)
+            else:
+                form_data[prefixed_field_name] = formset.data[prefixed_field_name]
+
+        query_dict = QueryDict(mutable=True)
+        query_dict.update(form_data)
+        formset.data = query_dict
+        # Clear cached values, so that they are recomputed using the modified
+        # request data
+        del formset.management_form
+        del formset.forms
+        # Clean the formset's modified request data
+        formset.full_clean()
 
 
 class BasketAddView(FormView):
     """
     Handles the add-to-basket submissions, which are triggered from various
     parts of the site. The add-to-basket form is loaded into templates using
-    a templatetag from module basket_tags.py.
+    a templatetag from :py:mod:`oscar.templatetags.basket_tags`.
     """
     form_class = AddToBasketForm
     product_model = get_model('catalogue', 'product')
@@ -253,10 +317,10 @@ class BasketAddView(FormView):
     def post(self, request, *args, **kwargs):
         self.product = shortcuts.get_object_or_404(
             self.product_model, pk=kwargs['pk'])
-        return super(BasketAddView, self).post(request, *args, **kwargs)
+        return super().post(request, *args, **kwargs)
 
     def get_form_kwargs(self):
-        kwargs = super(BasketAddView, self).get_form_kwargs()
+        kwargs = super().get_form_kwargs()
         kwargs['basket'] = self.request.basket
         kwargs['product'] = self.product
         return kwargs
@@ -288,17 +352,17 @@ class BasketAddView(FormView):
             sender=self, product=form.product, user=self.request.user,
             request=self.request)
 
-        return super(BasketAddView, self).form_valid(form)
+        return super().form_valid(form)
 
     def get_success_message(self, form):
         return render_to_string(
-            'basket/messages/addition.html',
+            'oscar/basket/messages/addition.html',
             {'product': form.product,
              'quantity': form.cleaned_data['quantity']})
 
     def get_success_url(self):
         post_url = self.request.POST.get('next')
-        if post_url and is_safe_url(post_url, self.request.get_host()):
+        if post_url and url_has_allowed_host_and_scheme(post_url, self.request.get_host()):
             return post_url
         return safe_referrer(self.request, 'basket:summary')
 
@@ -427,6 +491,11 @@ class SavedView(ModelFormSetView):
         return redirect('basket:summary')
 
     def get_queryset(self):
+        """
+        Return list of :py:class:`Line <oscar.apps.basket.abstract_models.AbstractLine>`
+        instances associated with the saved basked associated with the currently
+        authenticated user.
+        """  # noqa: E501
         try:
             saved_basket = self.basket_model.saved.get(owner=self.request.user)
             saved_basket.strategy = self.request.strategy
@@ -438,7 +507,7 @@ class SavedView(ModelFormSetView):
         return safe_referrer(self.request, 'basket:summary')
 
     def get_formset_kwargs(self):
-        kwargs = super(SavedView, self).get_formset_kwargs()
+        kwargs = super().get_formset_kwargs()
         kwargs['prefix'] = 'saved'
         kwargs['basket'] = self.request.basket
         kwargs['strategy'] = self.request.strategy
@@ -452,7 +521,7 @@ class SavedView(ModelFormSetView):
             if form.cleaned_data.get('move_to_basket', False):
                 is_move = True
                 msg = render_to_string(
-                    'basket/messages/line_restored.html',
+                    'oscar/basket/messages/line_restored.html',
                     {'line': form.instance})
                 messages.info(self.request, msg, extra_tags='safe noicon')
                 real_basket = self.request.basket
@@ -464,7 +533,7 @@ class SavedView(ModelFormSetView):
             BasketMessageGenerator().apply_messages(self.request, offers_before)
             response = redirect(self.get_success_url())
         else:
-            response = super(SavedView, self).formset_valid(formset)
+            response = super().formset_valid(formset)
         return response
 
     def formset_invalid(self, formset):

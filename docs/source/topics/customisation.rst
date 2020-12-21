@@ -5,7 +5,7 @@ Customising Oscar
 Many parts of Oscar can be adapted to your needs like any other Django
 application:
 
-* Many :doc:`settings</ref/settings>` control Oscar's behavior
+* Many :doc:`settings</ref/settings>` control Oscar's behaviour
 * The looks can be controlled by extending or overriding the
   :doc:`templates </howto/how_to_customise_templates>`
 
@@ -13,12 +13,12 @@ But as Oscar is built as a highly customisable and extendable framework, it
 doesn't stop there. The behaviour of all Oscar apps can heavily be altered
 by injecting your own code.
 
-To extend the behavior of an Oscar core app, it needs to be forked, which is
+To extend the behaviour of an Oscar core app, it needs to be forked, which is
 achieved with a simple management command. Afterwards, you should
 generally be able to override any class/model/view by just dropping it
 in the right place and giving it the same name.
 
-In some cases, customising is slightly more involved. The following how-tos
+In some cases, customising is slightly more involved. The following guides
 give plenty of examples for specific use cases:
 
 * :doc:`/howto/how_to_customise_models`
@@ -46,39 +46,27 @@ a root module under which all your forked apps will live::
 Now you call the helper management command which creates some basic files for
 you. It is explained in detail in :doc:`fork_app`. Run it like this::
 
-    $ ./manage.py oscar_fork_app order yourappsfolder/
-    Creating folder apps/order
-    Creating __init__.py and admin.py
-    Creating models.py and copying migrations from [...] to [...]
+    $ ./manage.py oscar_fork_app order yourappsfolder
+    Creating package yourappsfolder/order
+    Creating admin.py
+    Creating app config
+    Creating models.py
+    Creating migrations folder
+    Replace the entry 'oscar.apps.order.apps.OrderConfig' with 'yourappsfolder.order.apps.OrderConfig' in INSTALLED_APPS
 
-.. note::
 
-   For forking app in project root directory, call ``oscar_fork_app`` with ``.`` (dot) instead of ``yourproject/`` path.
-   
-   Example: 
-   
-   Calling ``./manage.py oscar_fork_app order yourproject/`` ``order`` app will be placed in ``project_root/yourproject/`` directory. 
-   Calling ``./manage.py oscar_fork_app order .`` ``order`` app will be placed in ``project_root/`` directory.
+``oscar_fork_app`` has an optional third argument, which allows specifying
+the sub-package name of the new app. For example, calling
+``./manage.py oscar_fork_app order yourproject/ yoursubpackage.order`` places
+the ``order`` app in the
+``project_root/yourproject/yoursubpackage/order`` directory.
 
 Replace Oscar's app with your own in ``INSTALLED_APPS``
 =======================================================
 
 You will need to let Django know that you replaced one of Oscar's core
-apps. You can do that by supplying an extra argument to
-``get_core_apps`` function::
-
-    # settings.py
-
-    from oscar import get_core_apps
-    # ...
-    INSTALLED_APPS = [
-        # all your non-Oscar apps
-    ] + get_core_apps(['yourappsfolder.order'])
-
-``get_core_apps([])`` will return a list of Oscar core apps. If you supply a
-list of additional apps, they will be used to replace the Oscar core apps.
-In the above example, ``yourproject.order`` will be returned instead of
-``oscar.apps.order``.
+apps. You can do that by replacing its entry in the ``INSTALLED_APPS`` setting,
+with that for your own app.
 
 .. note::
 
@@ -87,21 +75,25 @@ In the above example, ``yourproject.order`` will be returned instead of
     declared in the core applications. Otherwise, it could cause issues
     with Oscar's dynamic model loading.
 
+    If you want to customise one of the dashboard applications, for instance
+    ``yourappsfolder.dashboard.catalogue``, you also need to fork the core
+    dashboard application ``yourappsfolder.dashboard``.
+
     Example:
 
     .. code:: django
 
         INSTALLED_APPS = [
             # all your non-Oscar apps
-        ] + get_core_apps([
+            ...
             # core applications
-            'yourappsfolder.catalogue',
-            'yourappsfolder.order',
+            'yourappsfolder.catalogue.apps.CatalogueConfig',
+            'yourappsfolder.order.apps.OrderConfig',
             # dashboard applications
-            'yourappsfolder.dashboard',
-            'yourappsfolder.dashboard.orders',
-            'yourappsfolder.dashboard.reports',
-        ])
+            'yourappsfolder.dashboard.apps.DashboardConfig',
+            'yourappsfolder.dashboard.orders.apps.OrdersDashboardConfig',
+            'yourappsfolder.dashboard.reports.apps.ReportsDashboardConfig',
+        ]
 
 
 Start customising!
@@ -127,5 +119,8 @@ could subclass the class from Oscar or not::
     class OrderNumberGenerator(CoreOrderNumberGenerator):
 
         def order_number(self, basket=None):
-            num = super(OrderNumberGenerator, self).order_number(basket)
+            num = super().order_number(basket)
             return "SHOP-%s" % num
+
+To obtain an Oscar app's app config instance, look it up in the Django app
+registry.

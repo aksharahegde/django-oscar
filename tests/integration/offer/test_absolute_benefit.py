@@ -1,13 +1,13 @@
 from decimal import Decimal as D
+from unittest import mock
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-import mock
 
 from oscar.apps.offer import models
 from oscar.apps.offer.utils import Applicator
-from oscar.test.basket import add_product, add_products
 from oscar.test import factories
+from oscar.test.basket import add_product, add_products
 
 
 class TestAnAbsoluteDiscountAppliedWithCountConditionOnDifferentRange(TestCase):
@@ -136,7 +136,7 @@ class TestAnAbsoluteDiscountAppliedWithCountCondition(TestCase):
         self.assertEqual(4, self.basket.num_items_with_discount)
         self.assertEqual(0, self.basket.num_items_without_discount)
 
-    def test_applies_correctly_to_basket_which_exceeds_condition_with_smaller_prices_than_discount_and_higher_prices_first(self):
+    def test_applies_basket_exceeding_condition_smaller_prices_than_discount_higher_prices_first(self):
         add_products(self.basket, [
             (D('2.00'), 2), (D('4.00'), 2)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
@@ -202,22 +202,22 @@ class TestAnAbsoluteDiscountWithMaxItemsSetAppliedWithCountCondition(TestCase):
         add_product(self.basket, D('12.00'), 2)
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('3.00'), result.discount)
-        self.assertEqual(2, self.basket.num_items_with_discount)
-        self.assertEqual(0, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(1, self.basket.num_items_without_discount)
 
     def test_applies_correctly_to_basket_which_exceeds_condition(self):
         add_products(self.basket, [(D('12.00'), 2), (D('10.00'), 2)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('3.00'), result.discount)
-        self.assertEqual(2, self.basket.num_items_with_discount)
-        self.assertEqual(2, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(3, self.basket.num_items_without_discount)
 
     def test_applies_correctly_to_basket_which_exceeds_condition_but_with_smaller_prices_than_discount(self):
         add_products(self.basket, [(D('2.00'), 2), (D('1.00'), 2)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('1.00'), result.discount)
-        self.assertEqual(2, self.basket.num_items_with_discount)
-        self.assertEqual(2, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(3, self.basket.num_items_without_discount)
 
 
 class TestAnAbsoluteDiscountAppliedWithValueCondition(TestCase):
@@ -305,29 +305,29 @@ class TestAnAbsoluteDiscountWithMaxItemsSetAppliedWithValueCondition(TestCase):
         add_products(self.basket, [(D('5.00'), 2)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('3.00'), result.discount)
-        self.assertEqual(2, self.basket.num_items_with_discount)
-        self.assertEqual(0, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(1, self.basket.num_items_without_discount)
 
     def test_applies_correctly_to_multi_item_basket_which_exceeds_condition(self):
         add_products(self.basket, [(D('4.00'), 3)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('3.00'), result.discount)
-        self.assertEqual(3, self.basket.num_items_with_discount)
-        self.assertEqual(0, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(2, self.basket.num_items_without_discount)
 
     def test_applies_correctly_to_multi_item_basket_which_exceeds_condition_but_matches_boundary(self):
         add_products(self.basket, [(D('5.00'), 3)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('3.00'), result.discount)
-        self.assertEqual(2, self.basket.num_items_with_discount)
-        self.assertEqual(1, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(2, self.basket.num_items_without_discount)
 
     def test_applies_correctly_to_multi_item_basket_which_matches_condition_but_with_lower_prices_than_discount(self):
         add_products(self.basket, [(D('2.00'), 6)])
         result = self.benefit.apply(self.basket, self.condition, self.offer)
         self.assertEqual(D('2.00'), result.discount)
-        self.assertEqual(5, self.basket.num_items_with_discount)
-        self.assertEqual(1, self.basket.num_items_without_discount)
+        self.assertEqual(1, self.basket.num_items_with_discount)
+        self.assertEqual(5, self.basket.num_items_without_discount)
 
 
 class TestAnAbsoluteDiscountBenefit(TestCase):
@@ -347,3 +347,40 @@ class TestAnAbsoluteDiscountBenefit(TestCase):
         )
         with self.assertRaises(ValidationError):
             benefit.clean()
+
+    def test_non_negative_basket_lines_values(self):
+        # absolute benefit is larger than the line price
+        rng = models.Range.objects.create(
+            name="", includes_all_products=True)
+        benefit1 = models.Benefit.objects.create(
+            type=models.Benefit.FIXED, range=rng, value=D('100')
+        )
+        benefit2 = models.Benefit.objects.create(
+            type=models.Benefit.FIXED, range=rng, value=D('100')
+        )
+        condition = models.ValueCondition.objects.create(
+            range=rng,
+            type=models.Condition.VALUE,
+            value=D('10'))
+        models.ConditionalOffer.objects.create(
+            name='offer1',
+            benefit=benefit1,
+            condition=condition,
+            exclusive=False
+        )
+        models.ConditionalOffer.objects.create(
+            name='offer2',
+            benefit=benefit2,
+            condition=condition,
+            exclusive=False
+        )
+
+        basket = factories.create_basket(empty=True)
+        add_products(basket, [(D('20'), 1)])
+
+        Applicator().apply(basket)
+        assert len(basket.offer_applications) == 2
+        line = basket.all_lines().first()
+        assert line.line_price_excl_tax_incl_discounts == D(0)
+        assert line.line_price_incl_tax_incl_discounts == D(0)
+        assert basket.total_incl_tax == 0

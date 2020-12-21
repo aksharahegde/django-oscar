@@ -4,18 +4,14 @@ import zlib
 from django.conf import settings
 from django.core import exceptions
 from django.db import models
-from django.utils.encoding import python_2_unicode_compatible
-from django.utils.six.moves import filter
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 from phonenumber_field.modelfields import PhoneNumberField
 
 from oscar.core.compat import AUTH_USER_MODEL
-from oscar.core.decorators import deprecated
 from oscar.models.fields import UppercaseCharField
 
 
-@python_2_unicode_compatible
 class AbstractAddress(models.Model):
     """
     Superclass address object
@@ -107,7 +103,7 @@ class AbstractAddress(models.Model):
         'HT': r'^[0-9]{4}$',
         'HU': r'^[0-9]{4}$',
         'ID': r'^[0-9]{5}$',
-        'IL': r'^[0-9]{7}$',
+        'IL': r'^([0-9]{5}|[0-9]{7})$',
         'IM': r'^IM[0-9]{2,3}[A-Z]{2}$$',
         'IN': r'^[0-9]{6}$',
         'IO': r'^[A-Z]{4}[0-9][A-Z]{2}$',
@@ -218,7 +214,7 @@ class AbstractAddress(models.Model):
     }
 
     title = models.CharField(
-        pgettext_lazy(u"Treatment Pronouns for the customer", u"Title"),
+        pgettext_lazy("Treatment Pronouns for the customer", "Title"),
         max_length=64, choices=TITLE_CHOICES, blank=True)
     first_name = models.CharField(_("First name"), max_length=255, blank=True)
     last_name = models.CharField(_("Last name"), max_length=255, blank=True)
@@ -259,7 +255,7 @@ class AbstractAddress(models.Model):
 
     def save(self, *args, **kwargs):
         self._update_search_text()
-        super(AbstractAddress, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def clean(self):
         # Strip all whitespace
@@ -318,7 +314,7 @@ class AbstractAddress(models.Model):
         Returns a single string summary of the address,
         separating fields using commas.
         """
-        return u", ".join(self.active_address_fields())
+        return ", ".join(self.active_address_fields())
 
     @property
     def salutation(self):
@@ -327,11 +323,11 @@ class AbstractAddress(models.Model):
         """
         return self.join_fields(
             ('title', 'first_name', 'last_name'),
-            separator=u" ")
+            separator=" ")
 
     @property
     def name(self):
-        return self.join_fields(('first_name', 'last_name'), separator=u" ")
+        return self.join_fields(('first_name', 'last_name'), separator=" ")
 
     # Helpers
 
@@ -371,7 +367,7 @@ class AbstractAddress(models.Model):
         # `& 0xffffffff` expression.
         return zlib.crc32(', '.join(field_values).upper().encode('UTF8')) & 0xffffffff
 
-    def join_fields(self, fields, separator=u", "):
+    def join_fields(self, fields, separator=", "):
         """
         Join a sequence of fields using the specified separator
         """
@@ -401,10 +397,9 @@ class AbstractAddress(models.Model):
         return self.get_address_field_values(self.base_fields)
 
 
-@python_2_unicode_compatible
 class AbstractCountry(models.Model):
     """
-    International Organization for Standardization (ISO) 3166-1 Country list.
+    `ISO 3166 Country Codes <https://www.iso.org/iso-3166-country-codes.html>`_
 
     The field names are a bit awkward, but kept for backwards compatibility.
     pycountry's syntax of alpha2, alpha3, name and official_name seems sane.
@@ -417,7 +412,7 @@ class AbstractCountry(models.Model):
         _('ISO 3166-1 numeric'), blank=True, max_length=3)
 
     #: The commonly used name; e.g. 'United Kingdom'
-    printable_name = models.CharField(_('Country name'), max_length=128)
+    printable_name = models.CharField(_('Country name'), max_length=128, db_index=True)
     #: The full official name of a country
     #: e.g. 'United Kingdom of Great Britain and Northern Ireland'
     name = models.CharField(_('Official name'), max_length=128)
@@ -451,12 +446,12 @@ class AbstractCountry(models.Model):
         """
         Shorthand for the ISO 3166 numeric code.
 
-        iso_3166_1_numeric used to wrongly be a integer field, but has to be
-        padded with leading zeroes. It's since been converted to a char field,
-        but the database might still contain non-padded strings. That's why
-        the padding is kept.
+        :py:attr:`.iso_3166_1_numeric` used to wrongly be a integer field, but has to
+        be padded with leading zeroes. It's since been converted to a char
+        field, but the database might still contain non-padded strings. That's
+        why the padding is kept.
         """
-        return u"%.03d" % int(self.iso_3166_1_numeric)
+        return "%.03d" % int(self.iso_3166_1_numeric)
 
 
 class AbstractShippingAddress(AbstractAddress):
@@ -495,10 +490,7 @@ class AbstractShippingAddress(AbstractAddress):
         """
         Return the order linked to this shipping address
         """
-        try:
-            return self.order_set.all()[0]
-        except IndexError:
-            return None
+        return self.order_set.first()
 
 
 class AbstractUserAddress(AbstractShippingAddress):
@@ -553,7 +545,7 @@ class AbstractUserAddress(AbstractShippingAddress):
         # Ensure that each user only has one default shipping address
         # and billing address
         self._ensure_defaults_integrity()
-        super(AbstractUserAddress, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def _ensure_defaults_integrity(self):
         if self.is_default_for_shipping:
@@ -574,7 +566,7 @@ class AbstractUserAddress(AbstractShippingAddress):
         unique_together = ('user', 'hash')
 
     def validate_unique(self, exclude=None):
-        super(AbstractAddress, self).validate_unique(exclude)
+        super().validate_unique(exclude)
         qs = self.__class__.objects.filter(
             user=self.user,
             hash=self.generate_hash())
@@ -584,11 +576,6 @@ class AbstractUserAddress(AbstractShippingAddress):
             raise exceptions.ValidationError({
                 '__all__': [_("This address is already in your address"
                               " book")]})
-
-    @property
-    @deprecated
-    def num_orders(self):
-        return self.num_orders_as_shipping_address
 
 
 class AbstractBillingAddress(AbstractAddress):
@@ -604,10 +591,7 @@ class AbstractBillingAddress(AbstractAddress):
         """
         Return the order linked to this shipping address
         """
-        try:
-            return self.order_set.all()[0]
-        except IndexError:
-            return None
+        return self.order_set.first()
 
 
 class AbstractPartnerAddress(AbstractAddress):

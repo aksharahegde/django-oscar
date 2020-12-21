@@ -1,6 +1,7 @@
 from decimal import Decimal as D
 
-from django.utils.translation import ugettext_lazy as _
+from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_class, get_classes, get_model
 from oscar.templatetags.currency_filters import currency
@@ -19,11 +20,13 @@ __all__ = [
 ]
 
 
-def apply_discount(line, discount, quantity, offer=None):
+def apply_discount(line, discount, quantity, offer=None, incl_tax=None):
     """
     Apply a given discount to the passed basket
     """
-    line.discount(discount, quantity, incl_tax=False, offer=offer)
+    # use OSCAR_OFFERS_INCL_TAX setting if incl_tax is left unspecified.
+    incl_tax = incl_tax if incl_tax is not None else settings.OSCAR_OFFERS_INCL_TAX
+    line.discount(discount, quantity, incl_tax=incl_tax, offer=offer)
 
 
 class PercentageDiscountBenefit(Benefit):
@@ -51,7 +54,7 @@ class PercentageDiscountBenefit(Benefit):
         verbose_name_plural = _("Percentage discount benefits")
 
     def apply(self, basket, condition, offer, discount_percent=None,
-              max_total_discount=None):
+              max_total_discount=None, **kwargs):
         if discount_percent is None:
             discount_percent = self.value
 
@@ -71,9 +74,13 @@ class PercentageDiscountBenefit(Benefit):
 
             quantity_affected = min(
                 line.quantity_without_offer_discount(offer),
-                max_affected_items - affected_items)
+                max_affected_items - affected_items
+            )
+            if quantity_affected <= 0:
+                break
+
             line_discount = self.round(discount_percent / D('100.0') * price
-                                       * int(quantity_affected))
+                                       * int(quantity_affected), basket.currency)
 
             if discount_amount_available is not None:
                 line_discount = min(line_discount, discount_amount_available)
@@ -85,8 +92,6 @@ class PercentageDiscountBenefit(Benefit):
             affected_items += quantity_affected
             discount += line_discount
 
-        if discount > 0:
-            condition.consume_items(offer, basket, affected_lines)
         return BasketDiscount(discount)
 
 
@@ -115,7 +120,7 @@ class AbsoluteDiscountBenefit(Benefit):
         verbose_name_plural = _("Absolute discount benefits")
 
     def apply(self, basket, condition, offer, discount_amount=None,
-              max_total_discount=None):
+              max_total_discount=None, **kwargs):
         if discount_amount is None:
             discount_amount = self.value
 
@@ -133,7 +138,8 @@ class AbsoluteDiscountBenefit(Benefit):
                 break
             qty = min(
                 line.quantity_without_offer_discount(offer),
-                max_affected_items - num_affected_items)
+                max_affected_items - num_affected_items
+            )
             lines_to_discount.append((line, price, qty))
             num_affected_items += qty
             affected_items_total += qty * price
@@ -147,11 +153,14 @@ class AbsoluteDiscountBenefit(Benefit):
         if discount == 0:
             return ZERO_DISCOUNT
 
+        # XXX: spreading the discount is a policy decision that may not apply
+
         # Apply discount equally amongst them
         affected_lines = []
         applied_discount = D('0.00')
+        last_line_idx = len(lines_to_discount) - 1
         for i, (line, price, qty) in enumerate(lines_to_discount):
-            if i == len(lines_to_discount) - 1:
+            if i == last_line_idx:
                 # If last line, then take the delta as the discount to ensure
                 # the total discount is correct and doesn't mismatch due to
                 # rounding.
@@ -159,12 +168,10 @@ class AbsoluteDiscountBenefit(Benefit):
             else:
                 # Calculate a weighted discount for the line
                 line_discount = self.round(
-                    ((price * qty) / affected_items_total) * discount)
+                    ((price * qty) / affected_items_total) * discount, basket.currency)
             apply_discount(line, line_discount, qty, offer)
             affected_lines.append((line, line_discount, qty))
             applied_discount += line_discount
-
-        condition.consume_items(offer, basket, affected_lines)
 
         return BasketDiscount(discount)
 
@@ -194,7 +201,7 @@ class FixedPriceBenefit(Benefit):
         verbose_name = _("Fixed price benefit")
         verbose_name_plural = _("Fixed price benefits")
 
-    def apply(self, basket, condition, offer):  # noqa (too complex (10))
+    def apply(self, basket, condition, offer, **kwargs):  # noqa (too complex (10))
         if isinstance(condition, ValueCondition):
             return ZERO_DISCOUNT
 
@@ -236,7 +243,7 @@ class FixedPriceBenefit(Benefit):
                 line_discount = discount - discount_applied
             else:
                 line_discount = self.round(
-                    discount * (price * quantity) / value_affected)
+                    discount * (price * quantity) / value_affected, basket.currency)
             apply_discount(line, line_discount, quantity, offer)
             discount_applied += line_discount
         return BasketDiscount(discount)
@@ -261,19 +268,22 @@ class MultibuyDiscountBenefit(Benefit):
         verbose_name = _("Multibuy discount benefit")
         verbose_name_plural = _("Multibuy discount benefits")
 
-    def apply(self, basket, condition, offer):
+    def apply(self, basket, condition, offer, **kwargs):
         line_tuples = self.get_applicable_lines(offer, basket)
         if not line_tuples:
             return ZERO_DISCOUNT
 
         # Cheapest line gives free product
         discount, line = line_tuples[0]
-        apply_discount(line, discount, 1, offer)
+        if line.quantity_with_offer_discount(offer) == 0:
+            apply_discount(line, discount, 1, offer)
 
-        affected_lines = [(line, discount, 1)]
-        condition.consume_items(offer, basket, affected_lines)
+            affected_lines = [(line, discount, 1)]
+            condition.consume_items(offer, basket, affected_lines)
 
-        return BasketDiscount(discount)
+            return BasketDiscount(discount)
+        else:
+            return ZERO_DISCOUNT
 
 
 # =================
@@ -283,7 +293,7 @@ class MultibuyDiscountBenefit(Benefit):
 
 class ShippingBenefit(Benefit):
 
-    def apply(self, basket, condition, offer):
+    def apply(self, basket, condition, offer, **kwargs):
         condition.consume_items(offer, basket, affected_lines=())
         return SHIPPING_DISCOUNT
 
@@ -306,7 +316,7 @@ class ShippingAbsoluteDiscountBenefit(ShippingBenefit):
         verbose_name = _("Shipping absolute discount benefit")
         verbose_name_plural = _("Shipping absolute discount benefits")
 
-    def shipping_discount(self, charge):
+    def shipping_discount(self, charge, currency=None):
         return min(charge, self.value)
 
 
@@ -324,7 +334,7 @@ class ShippingFixedPriceBenefit(ShippingBenefit):
         verbose_name = _("Fixed price shipping benefit")
         verbose_name_plural = _("Fixed price shipping benefits")
 
-    def shipping_discount(self, charge):
+    def shipping_discount(self, charge, currency=None):
         if charge < self.value:
             return D('0.00')
         return charge - self.value
@@ -344,6 +354,6 @@ class ShippingPercentageDiscountBenefit(ShippingBenefit):
         verbose_name = _("Shipping percentage discount benefit")
         verbose_name_plural = _("Shipping percentage discount benefits")
 
-    def shipping_discount(self, charge):
+    def shipping_discount(self, charge, currency=None):
         discount = charge * self.value / D('100.0')
         return discount.quantize(D('0.01'))

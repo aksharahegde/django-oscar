@@ -3,7 +3,7 @@ from django.contrib.auth.models import Permission
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views import generic
 
 from oscar.apps.customer.utils import normalise_email
@@ -25,7 +25,7 @@ Partner = get_model('partner', 'Partner')
 class PartnerListView(generic.ListView):
     model = Partner
     context_object_name = 'partners'
-    template_name = 'dashboard/partners/partner_list.html'
+    template_name = 'oscar/dashboard/partners/partner_list.html'
     form_class = PartnerSearchForm
 
     def get_queryset(self):
@@ -51,7 +51,7 @@ class PartnerListView(generic.ListView):
         return qs
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerListView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['queryset_description'] = self.description
         ctx['form'] = self.form
         ctx['is_filtered'] = self.is_filtered
@@ -60,12 +60,12 @@ class PartnerListView(generic.ListView):
 
 class PartnerCreateView(generic.CreateView):
     model = Partner
-    template_name = 'dashboard/partners/partner_form.html'
+    template_name = 'oscar/dashboard/partners/partner_form.html'
     form_class = PartnerCreateForm
     success_url = reverse_lazy('dashboard:partner-list')
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerCreateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['title'] = _('Create new partner')
         return ctx
 
@@ -81,7 +81,7 @@ class PartnerManageView(generic.UpdateView):
     This multi-purpose view renders out a form to edit the partner's details,
     the associated address and a list of all associated users.
     """
-    template_name = 'dashboard/partners/partner_manage.html'
+    template_name = 'oscar/dashboard/partners/partner_manage.html'
     form_class = PartnerAddressForm
     success_url = reverse_lazy('dashboard:partner-list')
 
@@ -96,7 +96,7 @@ class PartnerManageView(generic.UpdateView):
         return {'name': self.partner.name}
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerManageView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['partner'] = self.partner
         ctx['title'] = self.partner.name
         ctx['users'] = self.partner.users.all()
@@ -108,12 +108,12 @@ class PartnerManageView(generic.UpdateView):
             self.partner.name)
         self.partner.name = form.cleaned_data['name']
         self.partner.save()
-        return super(PartnerManageView, self).form_valid(form)
+        return super().form_valid(form)
 
 
 class PartnerDeleteView(generic.DeleteView):
     model = Partner
-    template_name = 'dashboard/partners/partner_delete.html'
+    template_name = 'oscar/dashboard/partners/partner_delete.html'
 
     def get_success_url(self):
         messages.success(self.request,
@@ -129,23 +129,23 @@ class PartnerDeleteView(generic.DeleteView):
 
 class PartnerUserCreateView(generic.CreateView):
     model = User
-    template_name = 'dashboard/partners/partner_user_form.html'
+    template_name = 'oscar/dashboard/partners/partner_user_form.html'
     form_class = NewUserForm
 
     def dispatch(self, request, *args, **kwargs):
         self.partner = get_object_or_404(
             Partner, pk=kwargs.get('partner_pk', None))
-        return super(PartnerUserCreateView, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerUserCreateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['partner'] = self.partner
         ctx['title'] = _('Create user')
         return ctx
 
     def get_form_kwargs(self):
-        kwargs = super(PartnerUserCreateView, self).get_form_kwargs()
+        kwargs = super().get_form_kwargs()
         kwargs['partner'] = self.partner
         return kwargs
 
@@ -157,14 +157,14 @@ class PartnerUserCreateView(generic.CreateView):
 
 
 class PartnerUserSelectView(generic.ListView):
-    template_name = 'dashboard/partners/partner_user_select.html'
+    template_name = 'oscar/dashboard/partners/partner_user_select.html'
     form_class = UserEmailForm
     context_object_name = 'users'
 
     def dispatch(self, request, *args, **kwargs):
         self.partner = get_object_or_404(
             Partner, pk=kwargs.get('partner_pk', None))
-        return super(PartnerUserSelectView, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
@@ -172,10 +172,10 @@ class PartnerUserSelectView(generic.ListView):
         if 'email' in request.GET:
             data = request.GET
         self.form = self.form_class(data)
-        return super(PartnerUserSelectView, self).get(request, *args, **kwargs)
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerUserSelectView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['partner'] = self.partner
         ctx['form'] = self.form
         return ctx
@@ -253,7 +253,7 @@ class PartnerUserUnlinkView(generic.View):
         partner = get_object_or_404(Partner, pk=partner_pk)
         if self.unlink_user(user, partner):
             msg = render_to_string(
-                'dashboard/partners/messages/user_unlinked.html',
+                'oscar/dashboard/partners/messages/user_unlinked.html',
                 {'user_name': name,
                  'partner_name': partner.name,
                  'user_pk': user_pk,
@@ -273,7 +273,7 @@ class PartnerUserUnlinkView(generic.View):
 
 
 class PartnerUserUpdateView(generic.UpdateView):
-    template_name = 'dashboard/partners/partner_user_form.html'
+    template_name = 'oscar/dashboard/partners/partner_user_form.html'
     form_class = ExistingUserForm
 
     def get_object(self, queryset=None):
@@ -283,7 +283,7 @@ class PartnerUserUpdateView(generic.UpdateView):
                                  partners__pk=self.kwargs['partner_pk'])
 
     def get_context_data(self, **kwargs):
-        ctx = super(PartnerUserUpdateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         name = self.object.get_full_name() or self.object.email
         ctx['partner'] = self.partner
         ctx['title'] = _("Edit user '%s'") % name

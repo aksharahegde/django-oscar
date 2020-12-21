@@ -12,13 +12,13 @@ Oscar is split up in multiple, mostly independent apps.
    basket
    catalogue
    checkout
+   communication
    customer
    dashboard
    offer
    order
    partner
    payment
-   promotions
    search
    shipping
    voucher

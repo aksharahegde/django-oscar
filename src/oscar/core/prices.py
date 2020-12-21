@@ -51,6 +51,22 @@ class Price(object):
         """
         Two price objects are equal if currency, price.excl_tax and tax match.
         """
-        return (self.currency == other.currency and
-                self.excl_tax == other.excl_tax and
-                self.incl_tax == other.incl_tax)
+        return (self.currency == other.currency
+                and self.excl_tax == other.excl_tax
+                and self.incl_tax == other.incl_tax)
+
+    def __add__(self, other):
+        if self.currency != other.currency:
+            raise ValueError("Cannot add prices with different currencies.")
+
+        return Price(
+            currency=self.currency,
+            incl_tax=self.incl_tax + other.incl_tax,
+            excl_tax=self.excl_tax + other.excl_tax
+        )
+
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        else:
+            return self.__add__(other)

@@ -1,11 +1,12 @@
 from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import six
 
 from oscar.apps.basket import views
 from oscar.test import factories
+from oscar.test.testcases import WebTestCase
 from tests.fixtures import RequestFactory
+from tests.functional.checkout import CheckoutMixin
 
 
 class TestVoucherAddView(TestCase):
@@ -18,7 +19,7 @@ class TestVoucherAddView(TestCase):
         self.assertEqual(response.status_code, 302)
 
     def _get_voucher_message(self, request):
-        return '\n'.join(six.text_type(m.message) for m in get_messages(request))
+        return '\n'.join(str(m.message) for m in get_messages(request))
 
     def test_post_valid(self):
         voucher = factories.VoucherFactory()
@@ -104,9 +105,42 @@ class TestBasketSummaryView(TestCase):
         )
         request = RequestFactory().get(self.url, user=self.user)
         view = views.BasketView(request=request)
-        self.assertEquals(view.get_default_shipping_address(), user_address)
+        self.assertEqual(view.get_default_shipping_address(), user_address)
 
     def test_default_shipping_address_for_anonymous_user(self):
         request = RequestFactory().get(self.url)
         view = views.BasketView(request=request)
         self.assertIsNone(view.get_default_shipping_address())
+
+
+class TestVoucherViews(CheckoutMixin, WebTestCase):
+    csrf_checks = False
+
+    def setUp(self):
+        self.voucher = factories.create_voucher()
+        super().setUp()
+
+    def test_add_voucher(self):
+        """
+        Checks that voucher can be added to basket through appropriate view.
+        """
+        self.add_product_to_basket()
+
+        assert self.voucher.basket_set.count() == 0
+
+        response = self.post(reverse('basket:vouchers-add'), params={'code': self.voucher.code})
+        self.assertRedirectsTo(response, 'basket:summary')
+        assert self.voucher.basket_set.count() == 1
+
+    def test_remove_voucher(self):
+        """
+        Checks that voucher can be removed from basket through appropriate view.
+        """
+        self.add_product_to_basket()
+        self.add_voucher_to_basket(voucher=self.voucher)
+
+        assert self.voucher.basket_set.count() == 1
+
+        response = self.post(reverse('basket:vouchers-remove', kwargs={'pk': self.voucher.id}))
+        self.assertRedirectsTo(response, 'basket:summary')
+        assert self.voucher.basket_set.count() == 0

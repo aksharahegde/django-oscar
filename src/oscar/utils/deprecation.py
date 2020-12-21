@@ -1,2 +1,2 @@
-class RemovedInOscar20Warning(DeprecationWarning):
+class RemovedInOscar31Warning(DeprecationWarning):
     pass

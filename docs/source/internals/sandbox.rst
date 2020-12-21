@@ -1,3 +1,7 @@
+.. spelling::
+
+    uWSGI
+
 =====================
 Sample Oscar projects
 =====================
@@ -31,11 +35,10 @@ The sandbox is, in effect, the blank canvas upon which you can build your site.
 Browse the external sandbox site
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-An instance of the sandbox site is built hourly from master branch and made
-available at http://latest.oscarcommerce.com 
+An instance of the sandbox site is made available at https://latest.oscarcommerce.com
 
 .. warning::
-    
+
     It is possible for users to access the dashboard and edit the site content.
     Hence, the data can get quite messy.  It is periodically cleaned up.
 
@@ -46,24 +49,23 @@ Run the sandbox locally
 It's pretty straightforward to get the sandbox site running locally so you can
 play around with Oscar.
 
-.. warning::
-    
-    While installing Oscar is straightforward, some of Oscar's dependencies
-    don't support Windows and are tricky to be properly installed, and therefore
-    you might encounter some errors that prevent a successful installation.
-    
+In order to compile uWSGI, which is a dependency of the sandbox, you will
+first need to install the Python development headers with:::
+
+    $ sudo apt install python3-dev
+
 Install Oscar and its dependencies within a virtualenv:
 
 .. code-block:: bash
 
     $ git clone https://github.com/django-oscar/django-oscar.git
     $ cd django-oscar
-    $ mkvirtualenv oscar  # needs virtualenvwrapper
+    $ mkvirtualenv --python=python3 oscar  # needs virtualenvwrapper
     (oscar) $ make sandbox
     (oscar) $ sandbox/manage.py runserver
 
 .. warning::
-    
+
     Note, these instructions will install the head of Oscar's 'master' branch,
     not an official release. Occasionally the sandbox installation process
     breaks while support for a new version of Django is being added (often due
@@ -74,7 +76,7 @@ If you do not have ``mkvirtualenv``, then replace that line with:
 
 .. code-block:: bash
 
-    $ virtualenv oscar
+    $ virtualenv --python=python3 oscar
     $ source ./oscar/bin/activate
     (oscar) $
 
@@ -84,3 +86,23 @@ at: http://localhost:8000.  A sample superuser is installed with credentials::
     username: superuser
     email: superuser@example.com
     password: testing
+
+
+.. warning::
+
+    The sandbox has Django Debug Toolbar enabled by default, which will affect
+    its performance. You can disable it by setting ``INTERNAL_IPS`` to an
+    empty list in your local settings.
+
+
+Run the sandbox using Docker
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To run the Oscar sandbox using `Docker`_, run the following commands:
+
+.. _`Docker`: https://www.docker.com/
+
+.. code-block:: bash
+
+    $ docker pull oscarcommerce/django-oscar-sandbox
+    $ docker run -p 8080:8080/tcp oscarcommerce/django-oscar-sandbox:latest

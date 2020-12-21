@@ -1,7 +1,6 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models.fields import CharField, DecimalField
-from django.utils import six
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
 from oscar.core import validators
@@ -38,19 +37,21 @@ class ExtendedURLField(CharField):
         self.validators.append(validators.ExtendedURLValidator())
 
     def formfield(self, **kwargs):
-        # As with CharField, this will cause URL validation to be performed
-        # twice.
+        """
+        As with CharField, this will cause URL validation to be performed
+        twice.
+        """
         defaults = {
             'form_class': fields.ExtendedURLField,
         }
         defaults.update(kwargs)
-        return super(ExtendedURLField, self).formfield(**defaults)
+        return super().formfield(**defaults)
 
     def deconstruct(self):
         """
         deconstruct() is needed by Django's migration framework
         """
-        name, path, args, kwargs = super(ExtendedURLField, self).deconstruct()
+        name, path, args, kwargs = super().deconstruct()
         # We have a default value for max_length; remove it in that case
         if self.max_length == 200:
             del kwargs['max_length']
@@ -63,29 +64,32 @@ class PositiveDecimalField(DecimalField):
     restricts values to be non-negative.
     """
     def formfield(self, **kwargs):
-        return super(PositiveDecimalField, self).formfield(min_value=0)
+        """
+        Return a :py:class:`django.forms.Field` instantiated with a ``min_value`` of 0.
+        """
+        return super().formfield(min_value=0)
 
 
 class UppercaseCharField(CharField):
     """
     A simple subclass of ``django.db.models.fields.CharField`` that
     restricts all text to be uppercase.
-
-    Defined with the with_metaclass helper so that to_python is called
-    https://docs.djangoproject.com/en/1.6/howto/custom-model-fields/#the-subfieldbase-metaclass  # NOQA
     """
 
     def contribute_to_class(self, cls, name, **kwargs):
-        super(UppercaseCharField, self).contribute_to_class(
+        super().contribute_to_class(
             cls, name, **kwargs)
         setattr(cls, self.name, Creator(self))
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, *args, **kwargs):
         return self.to_python(value)
 
     def to_python(self, value):
-        val = super(UppercaseCharField, self).to_python(value)
-        if isinstance(val, six.string_types):
+        """
+        Cast the supplied value to uppercase
+        """
+        val = super().to_python(value)
+        if isinstance(val, str):
             return val.upper()
         else:
             return val
@@ -105,26 +109,26 @@ class NullCharField(CharField):
             raise ImproperlyConfigured(
                 "NullCharField implies null==blank==True")
         kwargs['null'] = kwargs['blank'] = True
-        super(NullCharField, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def contribute_to_class(self, cls, name, **kwargs):
-        super(NullCharField, self).contribute_to_class(cls, name, **kwargs)
+        super().contribute_to_class(cls, name, **kwargs)
         setattr(cls, self.name, Creator(self))
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, *args, **kwargs):
         value = self.to_python(value)
         # If the value was stored as null, return empty string instead
-        return value if value is not None else u''
+        return value if value is not None else ''
 
     def get_prep_value(self, value):
-        prepped = super(NullCharField, self).get_prep_value(value)
-        return prepped if prepped != u"" else None
+        prepped = super().get_prep_value(value)
+        return prepped if prepped != "" else None
 
     def deconstruct(self):
         """
         deconstruct() is needed by Django's migration framework
         """
-        name, path, args, kwargs = super(NullCharField, self).deconstruct()
+        name, path, args, kwargs = super().deconstruct()
         del kwargs['null']
         del kwargs['blank']
         return name, path, args, kwargs

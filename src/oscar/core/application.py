@@ -1,27 +1,17 @@
-from django.urls import reverse_lazy
+from django.apps import AppConfig
+from django.core.exceptions import ImproperlyConfigured
+from django.urls import URLPattern, reverse_lazy
 
 from oscar.core.loading import feature_hidden
-from oscar.views.decorators import permissions_required
 
 
-try:
-    # Django 2
-    from django.urls import URLPattern
-except ImportError:
-    # Django 1.11
-    from django.urls.resolvers import RegexURLPattern as URLPattern
-
-
-class Application(object):
+class OscarConfigMixin(object):
     """
-    Base application class.
-
-    This is subclassed by each app to provide a customisable container for an
-    app's views and permissions.
+    Base Oscar app configuration mixin, used to extend :py:class:`django.apps.AppConfig`
+    to also provide URL configurations and permissions.
     """
-    #: Application name
-    name = None
-
+    # Instance namespace for the URLs
+    namespace = None
     login_url = None
 
     #: A name that allows the functionality within this app to be disabled
@@ -29,7 +19,7 @@ class Application(object):
 
     #: Maps view names to lists of permissions. We expect tuples of
     #: lists as dictionary values. A list is a set of permissions that all
-    #: needto be fulfilled (AND). Only one set of permissions has to be
+    #: need to be fulfilled (AND). Only one set of permissions has to be
     #: fulfilled (OR).
     #: If there's only one set of permissions, as a shortcut, you can also
     #: just define one list.
@@ -38,19 +28,38 @@ class Application(object):
     #: Default permission for any view not in permissions_map
     default_permissions = None
 
-    def __init__(self, app_name=None, **kwargs):
+    def __init__(self, app_name, app_module, namespace=None, **kwargs):
         """
         kwargs:
-            app_name: optionally specify the instance namespace
+            namespace: optionally specify the URL instance namespace
         """
-        self.app_name = app_name or self.name
+        app_config_attrs = [
+            'name',
+            'module',
+            'apps',
+            'label',
+            'verbose_name',
+            'path',
+            'models_module',
+            'models',
+        ]
+        # To ensure sub classes do not add kwargs that are used by
+        # :py:class:`django.apps.AppConfig`
+        clashing_kwargs = set(kwargs).intersection(app_config_attrs)
+        if clashing_kwargs:
+            raise ImproperlyConfigured(
+                "Passed in kwargs can't be named the same as properties of "
+                "AppConfig; clashing: %s." % ", ".join(clashing_kwargs))
+        super().__init__(app_name, app_module)
+        if namespace is not None:
+            self.namespace = namespace
         # Set all kwargs as object attributes
         for key, value in kwargs.items():
             setattr(self, key, value)
 
     def get_urls(self):
         """
-        Return the url patterns for this app.
+        Return the URL patterns for this app.
         """
         return []
 
@@ -91,7 +100,7 @@ class Application(object):
         Return a list of permissions for a given URL name
 
         Args:
-            url (str): A URL name (eg ``basket.basket``)
+            url (str): A URL name (e.g., ``basket.basket``)
 
         Returns:
             list: A list of permission strings.
@@ -116,6 +125,7 @@ class Application(object):
 
         See permissions_required decorator for details
         """
+        from oscar.views.decorators import permissions_required
         permissions = self.get_permissions(pattern.name)
         if permissions:
             return permissions_required(permissions, login_url=self.login_url)
@@ -123,8 +133,17 @@ class Application(object):
     @property
     def urls(self):
         # We set the application and instance namespace here
-        return self.get_urls(), self.name, self.app_name
+        return self.get_urls(), self.label, self.namespace
 
 
-class DashboardApplication(Application):
+class OscarConfig(OscarConfigMixin, AppConfig):
+    """
+    Base Oscar app configuration.
+
+    This is subclassed by each app to provide a customisable container for its
+    configuration, URL configurations, and permissions.
+    """
+
+
+class OscarDashboardConfig(OscarConfig):
     login_url = reverse_lazy('dashboard:login')

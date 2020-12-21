@@ -3,16 +3,20 @@ from decimal import Decimal as D
 from django.conf import settings
 from django.contrib.sites.models import Site
 from django.db import transaction
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.apps.order.signals import order_placed
-from oscar.core.loading import get_model
+from oscar.core.loading import get_class, get_model
 
 from . import exceptions
 
 Order = get_model('order', 'Order')
 Line = get_model('order', 'Line')
 OrderDiscount = get_model('order', 'OrderDiscount')
+CommunicationEvent = get_model('order', 'CommunicationEvent')
+CommunicationEventType = get_model('communication', 'CommunicationEventType')
+Dispatcher = get_class('communication.utils', 'Dispatcher')
+Surcharge = get_model('order', 'Surcharge')
 
 
 class OrderNumberGenerator(object):
@@ -38,7 +42,7 @@ class OrderCreator(object):
     def place_order(self, basket, total,  # noqa (too complex (12))
                     shipping_method, shipping_charge, user=None,
                     shipping_address=None, billing_address=None,
-                    order_number=None, status=None, request=None, **kwargs):
+                    order_number=None, status=None, request=None, surcharges=None, **kwargs):
         """
         Placing an order involves creating all the relevant models based on the
         basket and session data.
@@ -57,6 +61,7 @@ class OrderCreator(object):
 
         with transaction.atomic():
 
+            kwargs['surcharges'] = surcharges
             # Ok - everything seems to be in order, let's place the order
             order = self.create_order_model(
                 user, basket, shipping_address, shipping_method, shipping_charge,
@@ -66,9 +71,12 @@ class OrderCreator(object):
                 self.update_stock_records(line)
 
             for voucher in basket.vouchers.select_for_update():
-                available_to_user, msg = voucher.is_available_to_user(user=user)
-                if not voucher.is_active() or not available_to_user:
-                    raise ValueError(msg)
+                if not voucher.is_active():  # basket ignores inactive vouchers
+                    basket.vouchers.remove(voucher)
+                else:
+                    available_to_user, msg = voucher.is_available_to_user(user=user)
+                    if not available_to_user:
+                        raise ValueError(msg)
 
             # Record any discounts associated with this order
             for application in basket.offer_applications:
@@ -100,7 +108,7 @@ class OrderCreator(object):
 
     def create_order_model(self, user, basket, shipping_address,
                            shipping_method, shipping_charge, billing_address,
-                           total, order_number, status, request=None, **extra_order_fields):
+                           total, order_number, status, request=None, surcharges=None, **extra_order_fields):
         """Create an order model."""
         order_data = {'basket': basket,
                       'number': order_number,
@@ -125,6 +133,15 @@ class OrderCreator(object):
             order_data['site'] = Site._default_manager.get_current(request)
         order = Order(**order_data)
         order.save()
+        if surcharges is not None:
+            for charge in surcharges:
+                Surcharge.objects.create(
+                    order=order,
+                    name=charge.surcharge.name,
+                    code=charge.surcharge.code,
+                    excl_tax=charge.price.excl_tax,
+                    incl_tax=charge.price.incl_tax
+                )
         return order
 
     def create_line_models(self, order, basket_line, extra_line_fields=None):
@@ -162,13 +179,8 @@ class OrderCreator(object):
             'line_price_before_discounts_incl_tax':
             basket_line.line_price_incl_tax,
             # Reporting details
-            'unit_cost_price': stockrecord.cost_price,
             'unit_price_incl_tax': basket_line.unit_price_incl_tax,
             'unit_price_excl_tax': basket_line.unit_price_excl_tax,
-            'unit_retail_price': stockrecord.price_retail,
-            # Shipping details
-            'est_dispatch_date':
-            basket_line.purchase_info.availability.dispatch_date
         }
         extra_line_fields = extra_line_fields or {}
         if hasattr(settings, 'OSCAR_INITIAL_LINE_STATUS'):
@@ -257,3 +269,45 @@ class OrderCreator(object):
         Updates the models that care about this voucher.
         """
         voucher.record_usage(order, user)
+
+
+class OrderDispatcher:
+    """
+    Dispatcher to send concrete order related emails.
+    """
+
+    # Event codes
+    ORDER_PLACED_EVENT_CODE = 'ORDER_PLACED'
+
+    def __init__(self, logger=None, mail_connection=None):
+        self.dispatcher = Dispatcher(logger=logger, mail_connection=mail_connection)
+
+    def dispatch_order_messages(self, order, messages, event_code, attachments=None, **kwargs):
+        """
+        Dispatch order-related messages to the customer.
+        """
+        self.dispatcher.logger.info("Order #%s - sending %s messages", order.number, event_code)
+        if order.is_anonymous:
+            email = kwargs.get('email_address', order.guest_email)
+            dispatched_messages = self.dispatcher.dispatch_anonymous_messages(email, messages, attachments)
+        else:
+            dispatched_messages = self.dispatcher.dispatch_user_messages(order.user, messages, attachments)
+
+        try:
+            event_type = CommunicationEventType.objects.get(code=event_code)
+        except CommunicationEventType.DoesNotExist:
+            event_type = None
+
+        self.create_communication_event(order, event_type, dispatched_messages)
+
+    def create_communication_event(self, order, event_type, dispatched_messages):
+        """
+        Create order communications event for audit.
+        """
+        if dispatched_messages and event_type is not None:
+            CommunicationEvent._default_manager.create(order=order, event_type=event_type)
+
+    def send_order_placed_email_for_user(self, order, extra_context, attachments=None):
+        event_code = self.ORDER_PLACED_EVENT_CODE
+        messages = self.dispatcher.get_messages(event_code, extra_context)
+        self.dispatch_order_messages(order, messages, event_code, attachments=attachments)

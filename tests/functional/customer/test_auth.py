@@ -4,10 +4,9 @@ from django.core import mail
 from django.urls import reverse
 from django_webtest import WebTest
 
-from oscar.test.testcases import WebTestCase
-from oscar.test import factories
 from oscar.core.compat import get_user_model
-
+from oscar.test import factories
+from oscar.test.testcases import WebTestCase
 
 User = get_user_model()
 
@@ -61,8 +60,8 @@ class TestAnAuthenticatedUser(WebTestCase):
         page = self.get(reverse('customer:change-password'))
         form = page.forms['change_password_form']
         form['old_password'] = self.password
-        form['new_password1'] = u'anotherfancypassword'
-        form['new_password2'] = u'anotherfancypassword'
+        form['new_password1'] = 'anotherfancypassword'
+        form['new_password2'] = 'anotherfancypassword'
         page = form.submit()
 
         self.assertEqual(len(mail.outbox), 1)
@@ -145,7 +144,7 @@ class TestAStaffUser(WebTestCase):
     def setUp(self):
         self.staff = factories.UserFactory.create(
             password=self.password, is_staff=True)
-        super(TestAStaffUser, self).setUp()
+        super().setUp()
 
     def test_gets_redirected_to_the_dashboard_when_they_login(self):
         page = self.get(reverse('customer:login'))

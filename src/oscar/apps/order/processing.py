@@ -1,12 +1,8 @@
 from decimal import Decimal as D
 
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.apps.order import exceptions
-from oscar.core.loading import get_model
-
-ShippingEventQuantity = get_model('order', 'ShippingEventQuantity')
-PaymentEventQuantity = get_model('order', 'PaymentEventQuantity')
 
 
 class EventHandler(object):
@@ -113,7 +109,7 @@ class EventHandler(object):
         specified shipping event.
 
         This is useful for validating if certain shipping events are allowed
-        (ie you can't return something before it has shipped).
+        (i.e. you can't return something before it has shipped).
         """
         for line, line_qty in zip(lines, line_quantities):
             if line.shipping_event_quantity(event_type) < line_qty:

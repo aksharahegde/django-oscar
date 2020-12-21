@@ -4,15 +4,13 @@ from django.core import exceptions
 from django.db import models, transaction
 from django.db.models import Sum
 from django.utils import timezone
-from django.utils.encoding import python_2_unicode_compatible
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.apps.voucher.utils import get_unused_code
 from oscar.core.compat import AUTH_USER_MODEL
 from oscar.core.loading import get_model
 
 
-@python_2_unicode_compatible
 class AbstractVoucherSet(models.Model):
     """A collection of vouchers (potentially auto-generated)
 
@@ -26,9 +24,8 @@ class AbstractVoucherSet(models.Model):
     with groups of 4 characters: XXXX-XXXX-XXXX. The dashes (-) do not count for
     the code_length.
 
-    - start_datetime, end_datetime: defines the validity datetime range for
-    all vouchers in the set.
-
+    - :py:attr:`.start_datetime` and :py:attr:`.end_datetime` together define the validity
+      range for all vouchers in the set.
     """
 
     name = models.CharField(verbose_name=_('Name'), max_length=100)
@@ -36,7 +33,7 @@ class AbstractVoucherSet(models.Model):
     code_length = models.IntegerField(
         verbose_name=_('Length of Code'), default=12)
     description = models.TextField(verbose_name=_('Description'))
-    date_created = models.DateTimeField(auto_now_add=True)
+    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
     start_datetime = models.DateTimeField(_('Start datetime'))
     end_datetime = models.DateTimeField(_('End datetime'))
 
@@ -49,6 +46,7 @@ class AbstractVoucherSet(models.Model):
         abstract = True
         app_label = 'voucher'
         get_latest_by = 'date_created'
+        ordering = ['-date_created']
         verbose_name = _("VoucherSet")
         verbose_name_plural = _("VoucherSets")
 
@@ -86,7 +84,7 @@ class AbstractVoucherSet(models.Model):
     def save(self, *args, **kwargs):
         self.count = max(self.count, self.vouchers.count())
         with transaction.atomic():
-            super(AbstractVoucherSet, self).save(*args, **kwargs)
+            super().save(*args, **kwargs)
             self.generate_vouchers()
             self.vouchers.update(
                 start_datetime=self.start_datetime,
@@ -109,7 +107,6 @@ class AbstractVoucherSet(models.Model):
         return value['result']
 
 
-@python_2_unicode_compatible
 class AbstractVoucher(models.Model):
     """
     A voucher.  This is simply a link to a collection of offers.
@@ -143,8 +140,8 @@ class AbstractVoucher(models.Model):
     usage = models.CharField(_("Usage"), max_length=128,
                              choices=USAGE_CHOICES, default=MULTI_USE)
 
-    start_datetime = models.DateTimeField(_('Start datetime'))
-    end_datetime = models.DateTimeField(_('End datetime'))
+    start_datetime = models.DateTimeField(_('Start datetime'), db_index=True)
+    end_datetime = models.DateTimeField(_('End datetime'), db_index=True)
 
     # Reporting information. Not used to enforce any consumption limits.
     num_basket_additions = models.PositiveIntegerField(
@@ -159,11 +156,12 @@ class AbstractVoucher(models.Model):
         on_delete=models.CASCADE
     )
 
-    date_created = models.DateTimeField(auto_now_add=True)
+    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         abstract = True
         app_label = 'voucher'
+        ordering = ['-date_created']
         get_latest_by = 'date_created'
         verbose_name = _("Voucher")
         verbose_name_plural = _("Vouchers")
@@ -179,7 +177,7 @@ class AbstractVoucher(models.Model):
 
     def save(self, *args, **kwargs):
         self.code = self.code.upper()
-        super(AbstractVoucher, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def is_active(self, test_datetime=None):
         """
@@ -222,6 +220,25 @@ class AbstractVoucher(models.Model):
                                 "a previous order")
         return is_available, message
 
+    def is_available_for_basket(self, basket):
+        """
+        Tests whether this voucher is available to the passed basket.
+
+        Returns a tuple of a boolean for whether it is successful, and a
+        availability message.
+        """
+        is_available, message = self.is_available_to_user(user=basket.owner)
+        if not is_available:
+            return False, message
+
+        is_available, message = False, _("This voucher is not available for this basket")
+        for offer in self.offers.all():
+            if offer.is_condition_satisfied(basket=basket):
+                is_available = True
+                message = ''
+                break
+        return is_available, message
+
     def record_usage(self, order, user):
         """
         Records a usage of this voucher in an order.
@@ -250,10 +267,9 @@ class AbstractVoucher(models.Model):
         A voucher is commonly only linked to one offer. In that case,
         this helper can be used for convenience.
         """
-        return self.offers.all()[0].benefit
+        return self.offers.first().benefit
 
 
-@python_2_unicode_compatible
 class AbstractVoucherApplication(models.Model):
     """
     For tracking how often a voucher has been used in an order.
@@ -279,11 +295,12 @@ class AbstractVoucherApplication(models.Model):
         'order.Order',
         on_delete=models.CASCADE,
         verbose_name=_("Order"))
-    date_created = models.DateTimeField(auto_now_add=True)
+    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         abstract = True
         app_label = 'voucher'
+        ordering = ['-date_created']
         verbose_name = _("Voucher Application")
         verbose_name_plural = _("Voucher Applications")
 

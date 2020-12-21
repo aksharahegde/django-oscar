@@ -3,9 +3,12 @@ from decimal import Decimal as D
 import factory
 from django.conf import settings
 
-from oscar.core.loading import get_model
+from oscar.core.loading import get_class, get_model
 from oscar.core.utils import slugify
+from oscar.test import factories
 from oscar.test.factories.utils import tax_add, tax_subtract
+
+OrderCreator = get_class('order.utils', 'OrderCreator')
 
 __all__ = [
     'BillingAddressFactory', 'ShippingAddressFactory', 'OrderDiscountFactory',
@@ -37,7 +40,7 @@ class ShippingAddressFactory(factory.DjangoModelFactory):
     line2 = '1a'
     line4 = 'City'
     postcode = '1000 AA'
-    phone_number = '06-12345678'
+    phone_number = '+12125555555'
 
     class Meta:
         model = get_model('order', 'ShippingAddress')
@@ -52,7 +55,6 @@ class OrderDiscountFactory(factory.DjangoModelFactory):
 class OrderFactory(factory.DjangoModelFactory):
     class Meta:
         model = get_model('order', 'Order')
-        exclude = ('basket',)
 
     if hasattr(settings, 'OSCAR_INITIAL_ORDER_STATUS'):
         status = settings.OSCAR_INITIAL_ORDER_STATUS
@@ -90,6 +92,18 @@ class OrderFactory(factory.DjangoModelFactory):
             instance.date_placed = date_placed
         return instance
 
+    @factory.post_generation
+    def create_line_models(obj, create, extracted, **kwargs):
+        if not create:
+            return
+        if extracted:
+            if not obj.basket.all_lines().exists():
+                product = factories.ProductFactory(stockrecords=None)
+                factories.StockRecordFactory(product=product, price_currency=settings.OSCAR_DEFAULT_CURRENCY)
+                obj.basket.add_product(product)
+            for line in obj.basket.all_lines():
+                OrderCreator().create_line_models(obj, line)
+
 
 class OrderLineFactory(factory.DjangoModelFactory):
     order = factory.SubFactory(OrderFactory)
@@ -100,24 +114,16 @@ class OrderLineFactory(factory.DjangoModelFactory):
         lambda l: l.product.stockrecords.first())
     quantity = 1
 
-    line_price_incl_tax = factory.LazyAttribute(
-        lambda obj: tax_add(obj.stockrecord.price_excl_tax) * obj.quantity)
-    line_price_excl_tax = factory.LazyAttribute(
-        lambda obj: obj.stockrecord.price_excl_tax * obj.quantity)
+    line_price_incl_tax = factory.LazyAttribute(lambda obj: tax_add(obj.stockrecord.price) * obj.quantity)
+    line_price_excl_tax = factory.LazyAttribute(lambda obj: obj.stockrecord.price * obj.quantity)
 
     line_price_before_discounts_incl_tax = (
         factory.SelfAttribute('.line_price_incl_tax'))
     line_price_before_discounts_excl_tax = (
         factory.SelfAttribute('.line_price_excl_tax'))
 
-    unit_price_incl_tax = factory.LazyAttribute(
-        lambda obj: tax_add(obj.stockrecord.price_excl_tax))
-    unit_cost_price = factory.LazyAttribute(
-        lambda obj: obj.stockrecord.cost_price)
-    unit_price_excl_tax = factory.LazyAttribute(
-        lambda obj: obj.stockrecord.price_excl_tax)
-    unit_retail_price = factory.LazyAttribute(
-        lambda obj: obj.stockrecord.price_retail)
+    unit_price_incl_tax = factory.LazyAttribute(lambda obj: tax_add(obj.stockrecord.price))
+    unit_price_excl_tax = factory.LazyAttribute(lambda obj: obj.stockrecord.price)
 
     class Meta:
         model = get_model('order', 'Line')

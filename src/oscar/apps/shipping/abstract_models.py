@@ -3,8 +3,7 @@ from decimal import Decimal as D
 
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.utils.encoding import python_2_unicode_compatible
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core import loading, prices
 from oscar.models.fields import AutoSlugField
@@ -12,14 +11,13 @@ from oscar.models.fields import AutoSlugField
 Scale = loading.get_class('shipping.scales', 'Scale')
 
 
-@python_2_unicode_compatible
 class AbstractBase(models.Model):
     """
     Implements the interface declared by shipping.base.Base
     """
     code = AutoSlugField(_("Slug"), max_length=128, unique=True,
-                         populate_from='name')
-    name = models.CharField(_("Name"), max_length=128, unique=True)
+                         populate_from='name', db_index=True)
+    name = models.CharField(_("Name"), max_length=128, unique=True, db_index=True)
     description = models.TextField(_("Description"), blank=True)
 
     # We allow shipping methods to be linked to a specific set of countries
@@ -78,8 +76,8 @@ class AbstractOrderAndItemCharges(AbstractBase):
         verbose_name_plural = _("Order and Item Charges")
 
     def calculate(self, basket):
-        if (self.free_shipping_threshold is not None and
-                basket.total_incl_tax >= self.free_shipping_threshold):
+        if (self.free_shipping_threshold is not None
+                and basket.total_incl_tax >= self.free_shipping_threshold):
             return prices.Price(
                 currency=basket.currency, excl_tax=D('0.00'),
                 incl_tax=D('0.00'))
@@ -153,23 +151,22 @@ class AbstractWeightBased(AbstractBase):
             return D('0.00')
 
         top_band = self.top_band
-        if weight < top_band.upper_limit:
+        if weight <= top_band.upper_limit:
             band = self.get_band_for_weight(weight)
             return band.charge
         else:
             quotient, remaining_weight = divmod(weight, top_band.upper_limit)
-            remainder_band = self.get_band_for_weight(remaining_weight)
-            return quotient * top_band.charge + remainder_band.charge
+            if remaining_weight:
+                remainder_band = self.get_band_for_weight(remaining_weight)
+                return quotient * top_band.charge + remainder_band.charge
+            else:
+                return quotient * top_band.charge
 
     def get_band_for_weight(self, weight):
         """
         Return the closest matching weight band for a given weight.
         """
-        try:
-            return self.bands.filter(
-                upper_limit__gte=weight).order_by('upper_limit')[0]
-        except IndexError:
-            return None
+        return self.bands.filter(upper_limit__gte=weight).order_by('upper_limit').first()
 
     @property
     def num_bands(self):
@@ -177,13 +174,9 @@ class AbstractWeightBased(AbstractBase):
 
     @property
     def top_band(self):
-        try:
-            return self.bands.order_by('-upper_limit')[0]
-        except IndexError:
-            return None
+        return self.bands.order_by('-upper_limit').first()
 
 
-@python_2_unicode_compatible
 class AbstractWeightBand(models.Model):
     """
     Represents a weight band which are used by the WeightBasedShipping method.
@@ -194,7 +187,7 @@ class AbstractWeightBand(models.Model):
         related_name='bands',
         verbose_name=_("Method"))
     upper_limit = models.DecimalField(
-        _("Upper Limit"), decimal_places=3, max_digits=12,
+        _("Upper Limit"), decimal_places=3, max_digits=12, db_index=True,
         validators=[MinValueValidator(D('0.00'))],
         help_text=_("Enter upper limit of this weight band in kg. The lower "
                     "limit will be determined by the other weight bands."))

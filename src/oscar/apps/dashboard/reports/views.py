@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.http import Http404, HttpResponseForbidden
 from django.template.response import TemplateResponse
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import ListView
 
 from oscar.core.loading import get_class
@@ -12,7 +12,7 @@ GeneratorRepository = get_class('dashboard.reports.utils',
 
 
 class IndexView(ListView):
-    template_name = 'dashboard/reports/index.html'
+    template_name = 'oscar/dashboard/reports/index.html'
     paginate_by = settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE
     context_object_name = 'objects'
     report_form_class = ReportForm
@@ -47,7 +47,8 @@ class IndexView(ListView):
                 if form.cleaned_data['download']:
                     return report
                 else:
-                    self.set_list_view_attrs(generator, report)
+                    self.template_name = generator.filename()
+                    self.object_list = self.queryset = generator.queryset
                     context = self.get_context_data(object_list=self.queryset)
                     context['form'] = form
                     context['description'] = generator.report_description()
@@ -55,8 +56,3 @@ class IndexView(ListView):
         else:
             form = self.report_form_class()
         return TemplateResponse(request, self.template_name, {'form': form})
-
-    def set_list_view_attrs(self, generator, report):
-        self.template_name = generator.filename()
-        queryset = generator.filter_with_date_range(report)
-        self.object_list = self.queryset = queryset

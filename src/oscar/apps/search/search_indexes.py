@@ -11,7 +11,7 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
     # Search text
     text = indexes.CharField(
         document=True, use_template=True,
-        template_name='search/indexes/product/item_text.txt')
+        template_name='oscar/search/indexes/product/item_text.txt')
 
     upc = indexes.CharField(model_attr="upc", null=True)
     title = indexes.EdgeNgramField(model_attr='title', null=True)
@@ -37,10 +37,10 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
 
     def index_queryset(self, using=None):
         # Only index browsable products (not each individual child product)
-        return self.get_model().browsable.order_by('-date_updated')
+        return self.get_model().objects.browsable().order_by('-date_updated')
 
     def read_queryset(self, using=None):
-        return self.get_model().browsable.base_queryset()
+        return self.get_model().objects.browsable().base_queryset()
 
     def prepare_product_class(self, obj):
         return obj.get_product_class().name
@@ -86,7 +86,7 @@ class ProductIndex(indexes.SearchIndex, indexes.Indexable):
             return result.stockrecord.net_stock_level
 
     def prepare(self, obj):
-        prepared_data = super(ProductIndex, self).prepare(obj)
+        prepared_data = super().prepare(obj)
 
         # We use Haystack's dynamic fields to ensure that the title field used
         # for sorting is of type "string'.

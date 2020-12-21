@@ -1,18 +1,21 @@
+import csv
 import os
 from decimal import Decimal as D
 
 from django.db.transaction import atomic
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
-from oscar.core.compat import UnicodeCSVReader
-from oscar.core.loading import get_class, get_classes
+from oscar.core.loading import get_class, get_model
 
 ImportingError = get_class('partner.exceptions', 'ImportingError')
-Partner, StockRecord = get_classes('partner.models', ['Partner',
-                                                      'StockRecord'])
-ProductClass, Product, Category, ProductCategory = get_classes(
-    'catalogue.models', ('ProductClass', 'Product', 'Category',
-                         'ProductCategory'))
+
+Category = get_model('catalogue', 'Category')
+Partner = get_model('partner', 'Partner')
+Product = get_model('catalogue', 'Product')
+ProductCategory = get_model('catalogue', 'ProductCategory')
+ProductClass = get_model('catalogue', 'ProductClass')
+StockRecord = get_model('partner', 'StockRecord')
+
 create_from_breadcrumbs = get_class('catalogue.categories', 'create_from_breadcrumbs')
 
 
@@ -30,7 +33,7 @@ class CatalogueImporter(object):
         self._flush = flush
 
     def handle(self, file_path=None):
-        u"""Handles the actual import process"""
+        """Handles the actual import process"""
         if not file_path:
             raise ImportingError(_("No file path supplied"))
         Validator().validate(file_path)
@@ -40,7 +43,7 @@ class CatalogueImporter(object):
         self._import(file_path)
 
     def _flush_product_data(self):
-        u"""Flush out product and stock models"""
+        """Flush out product and stock models"""
         Product.objects.all().delete()
         ProductClass.objects.all().delete()
         Partner.objects.all().delete()
@@ -48,13 +51,12 @@ class CatalogueImporter(object):
 
     @atomic
     def _import(self, file_path):
-        u"""Imports given file"""
+        """Imports given file"""
         stats = {'new_items': 0,
                  'updated_items': 0}
         row_number = 0
-        with UnicodeCSVReader(
-                file_path, delimiter=self._delimiter,
-                quotechar='"', escapechar='\\') as reader:
+        with open(file_path, 'rt') as f:
+            reader = csv.reader(f, escapechar='\\')
             for row in reader:
                 row_number += 1
                 self._import_row(row_number, row, stats)
@@ -99,8 +101,7 @@ class CatalogueImporter(object):
 
         return item
 
-    def _create_stockrecord(self, item, partner_name, partner_sku,
-                            price_excl_tax, num_in_stock, stats):
+    def _create_stockrecord(self, item, partner_name, partner_sku, price, num_in_stock, stats):
         # Create partner and stock record
         partner, _ = Partner.objects.get_or_create(
             name=partner_name)
@@ -112,7 +113,7 @@ class CatalogueImporter(object):
         stock.product = item
         stock.partner = partner
         stock.partner_sku = partner_sku
-        stock.price_excl_tax = D(price_excl_tax)
+        stock.price = D(price)
         stock.num_in_stock = num_in_stock
         stock.save()
 
@@ -125,17 +126,17 @@ class Validator(object):
         self._is_readable(file_path)
 
     def _exists(self, file_path):
-        u"""Check whether a file exists"""
+        """Check whether a file exists"""
         if not os.path.exists(file_path):
             raise ImportingError(_("%s does not exist") % (file_path))
 
     def _is_file(self, file_path):
-        u"""Check whether file is actually a file type"""
+        """Check whether file is actually a file type"""
         if not os.path.isfile(file_path):
             raise ImportingError(_("%s is not a file") % (file_path))
 
     def _is_readable(self, file_path):
-        u"""Check file is readable"""
+        """Check file is readable"""
         try:
             f = open(file_path, 'r')
             f.close()

@@ -1,4 +1,4 @@
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_class, get_model
 
@@ -31,12 +31,13 @@ class ProductReportCSVFormatter(ReportCSVFormatter):
 
 
 class ProductReportHTMLFormatter(ReportHTMLFormatter):
-    filename_template = 'dashboard/reports/partials/product_report.html'
+    filename_template = 'oscar/dashboard/reports/partials/product_report.html'
 
 
 class ProductReportGenerator(ReportGenerator):
     code = 'product_analytics'
     description = _('Product analytics')
+    model_class = ProductRecord
 
     formatters = {
         'CSV_formatter': ProductReportCSVFormatter,
@@ -44,10 +45,6 @@ class ProductReportGenerator(ReportGenerator):
 
     def report_description(self):
         return self.description
-
-    def generate(self):
-        records = ProductRecord._default_manager.all()
-        return self.formatter.generate_response(records)
 
     def is_available_to(self, user):
         return user.is_staff
@@ -83,20 +80,17 @@ class UserReportCSVFormatter(ReportCSVFormatter):
 
 
 class UserReportHTMLFormatter(ReportHTMLFormatter):
-    filename_template = 'dashboard/reports/partials/user_report.html'
+    filename_template = 'oscar/dashboard/reports/partials/user_report.html'
 
 
 class UserReportGenerator(ReportGenerator):
     code = 'user_analytics'
     description = _('User analytics')
+    queryset = UserRecord._default_manager.select_related().all()
 
     formatters = {
         'CSV_formatter': UserReportCSVFormatter,
         'HTML_formatter': UserReportHTMLFormatter}
-
-    def generate(self):
-        users = UserRecord._default_manager.select_related().all()
-        return self.formatter.generate_response(users)
 
     def is_available_to(self, user):
         return user.is_staff

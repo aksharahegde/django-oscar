@@ -7,9 +7,10 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views import generic
 
+from oscar.apps.voucher.utils import get_offer_name
 from oscar.core.loading import get_class, get_model
 from oscar.core.utils import slugify
 from oscar.views import sort_queryset
@@ -29,7 +30,7 @@ OrderDiscount = get_model('order', 'OrderDiscount')
 class VoucherListView(generic.ListView):
     model = Voucher
     context_object_name = 'vouchers'
-    template_name = 'dashboard/vouchers/voucher_list.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_list.html'
     form_class = VoucherSearchForm
     description_template = _("%(main_filter)s %(name_filter)s %(code_filter)s")
     paginate_by = settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE
@@ -73,7 +74,7 @@ class VoucherListView(generic.ListView):
         return qs
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherListView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         if self.form.is_bound:
             description = self.description_template % self.description_ctx
         else:
@@ -85,11 +86,11 @@ class VoucherListView(generic.ListView):
 
 class VoucherCreateView(generic.FormView):
     model = Voucher
-    template_name = 'dashboard/vouchers/voucher_form.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_form.html'
     form_class = VoucherForm
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherCreateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['title'] = _('Create voucher')
         return ctx
 
@@ -113,7 +114,7 @@ class VoucherCreateView(generic.FormView):
         )
         name = form.cleaned_data['name']
         offer = ConditionalOffer.objects.create(
-            name=_("Offer for voucher '%s'") % name,
+            name=get_offer_name(name),
             offer_type=ConditionalOffer.VOUCHER,
             benefit=benefit,
             condition=condition,
@@ -136,11 +137,11 @@ class VoucherCreateView(generic.FormView):
 
 class VoucherStatsView(generic.DetailView):
     model = Voucher
-    template_name = 'dashboard/vouchers/voucher_detail.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_detail.html'
     context_object_name = 'voucher'
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherStatsView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         discounts = OrderDiscount.objects.filter(voucher_id=self.object.id)
         discounts = discounts.order_by('-order__date_placed')
         ctx['discounts'] = discounts
@@ -148,7 +149,7 @@ class VoucherStatsView(generic.DetailView):
 
 
 class VoucherUpdateView(generic.FormView):
-    template_name = 'dashboard/vouchers/voucher_form.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_form.html'
     model = Voucher
     form_class = VoucherForm
 
@@ -158,19 +159,19 @@ class VoucherUpdateView(generic.FormView):
         return self.voucher
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherUpdateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['title'] = self.voucher.name
         ctx['voucher'] = self.voucher
         return ctx
 
     def get_form_kwargs(self):
-        kwargs = super(VoucherUpdateView, self).get_form_kwargs()
+        kwargs = super().get_form_kwargs()
         kwargs['voucher'] = self.get_voucher()
         return kwargs
 
     def get_initial(self):
         voucher = self.get_voucher()
-        offer = voucher.offers.all()[0]
+        offer = voucher.offers.first()
         benefit = offer.benefit
         return {
             'name': voucher.name,
@@ -194,11 +195,12 @@ class VoucherUpdateView(generic.FormView):
         voucher.end_datetime = form.cleaned_data['end_datetime']
         voucher.save()
 
-        offer = voucher.offers.all()[0]
+        offer = voucher.offers.first()
         offer.condition.range = form.cleaned_data['benefit_range']
         offer.condition.save()
 
         offer.exclusive = form.cleaned_data['exclusive']
+        offer.name = get_offer_name(voucher.name)
         offer.save()
 
         benefit = voucher.benefit
@@ -216,7 +218,7 @@ class VoucherUpdateView(generic.FormView):
 
 class VoucherDeleteView(generic.DeleteView):
     model = Voucher
-    template_name = 'dashboard/vouchers/voucher_delete.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_delete.html'
     context_object_name = 'voucher'
 
     def get_success_url(self):
@@ -226,11 +228,11 @@ class VoucherDeleteView(generic.DeleteView):
 
 class VoucherSetCreateView(generic.CreateView):
     model = VoucherSet
-    template_name = 'dashboard/vouchers/voucher_set_form.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_set_form.html'
     form_class = VoucherSetForm
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherSetCreateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['title'] = _('Create voucher set')
         return ctx
 
@@ -253,7 +255,7 @@ class VoucherSetCreateView(generic.CreateView):
         )
         name = form.cleaned_data['name']
         offer = ConditionalOffer.objects.create(
-            name=_("Offer for voucher '%s'") % name,
+            name=get_offer_name(name),
             offer_type=ConditionalOffer.VOUCHER,
             benefit=benefit,
             condition=condition,
@@ -276,12 +278,12 @@ class VoucherSetCreateView(generic.CreateView):
 
 
 class VoucherSetUpdateView(generic.UpdateView):
-    template_name = 'dashboard/vouchers/voucher_set_form.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_set_form.html'
     model = VoucherSet
     form_class = VoucherSetForm
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherSetUpdateView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['title'] = self.object.name
         ctx['voucher'] = self.object
         return ctx
@@ -322,7 +324,7 @@ class VoucherSetUpdateView(generic.UpdateView):
             )
             name = form.cleaned_data['name']
             offer, __ = ConditionalOffer.objects.update_or_create(
-                name=_("Offer for voucher '%s'") % name,
+                name=get_offer_name(name),
                 defaults=dict(
                     offer_type=ConditionalOffer.VOUCHER,
                     benefit=benefit,
@@ -356,14 +358,14 @@ class VoucherSetDetailView(generic.ListView):
 
     model = Voucher
     context_object_name = 'vouchers'
-    template_name = 'dashboard/vouchers/voucher_set_detail.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_set_detail.html'
     form_class = VoucherSetSearchForm
     description_template = _("%(main_filter)s %(name_filter)s %(code_filter)s")
     paginate_by = 50
 
     def dispatch(self, request, *args, **kwargs):
         self.voucher_set = get_object_or_404(VoucherSet, pk=kwargs['pk'])
-        return super(VoucherSetDetailView, self).dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = (
@@ -404,7 +406,7 @@ class VoucherSetDetailView(generic.ListView):
         return qs
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherSetDetailView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['voucher_set'] = self.voucher_set
         ctx['description'] = self.voucher_set.name
         ctx['form'] = self.form
@@ -414,7 +416,7 @@ class VoucherSetDetailView(generic.ListView):
 class VoucherSetListView(generic.ListView):
     model = VoucherSet
     context_object_name = 'vouchers'
-    template_name = 'dashboard/vouchers/voucher_set_list.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_set_list.html'
     description_template = _("%(main_filter)s %(name_filter)s %(code_filter)s")
     paginate_by = settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE
 
@@ -426,14 +428,14 @@ class VoucherSetListView(generic.ListView):
         return qs
 
     def get_context_data(self, **kwargs):
-        ctx = super(VoucherSetListView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         description = _("Voucher sets")
         ctx['description'] = description
         return ctx
 
 
 class VoucherSetDownloadView(generic.DetailView):
-    template_name = 'dashboard/vouchers/voucher_set_form.html'
+    template_name = 'oscar/dashboard/vouchers/voucher_set_form.html'
     model = VoucherSet
     form_class = VoucherSetForm
 

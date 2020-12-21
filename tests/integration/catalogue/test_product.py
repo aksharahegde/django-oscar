@@ -1,12 +1,11 @@
 # coding=utf-8
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 
-from oscar.apps.catalogue.models import (Product, ProductClass,
-                                         ProductAttribute,
-                                         AttributeOption,
-                                         ProductRecommendation)
+from oscar.apps.catalogue.models import (
+    AttributeOption, Product, ProductAttribute,
+    ProductClass, ProductRecommendation)
 from oscar.test import factories
 
 
@@ -20,7 +19,7 @@ class ProductTests(TestCase):
 class ProductCreationTests(ProductTests):
 
     def setUp(self):
-        super(ProductCreationTests, self).setUp()
+        super().setUp()
         ProductAttribute.objects.create(product_class=self.product_class,
                                         name='Number of pages',
                                         code='num_pages',
@@ -42,7 +41,7 @@ class ProductCreationTests(ProductTests):
                           title='testing', upc=None)
         product.save()
         product.refresh_from_db()
-        self.assertEqual(product.upc, u'')
+        self.assertEqual(product.upc, '')
 
     def test_upc_uniqueness_enforced(self):
         Product.objects.create(product_class=self.product_class,
@@ -64,24 +63,34 @@ class TopLevelProductTests(ProductTests):
         self.assertRaises(ValidationError, product.clean)
 
     def test_top_level_products_must_have_product_class(self):
-        product = Product(title=u"Kopfhörer")
+        product = Product(title="Kopfhörer")
         self.assertRaises(ValidationError, product.clean)
 
     def test_top_level_products_are_part_of_browsable_set(self):
         product = Product.objects.create(
-            product_class=self.product_class, title=u"Kopfhörer")
-        self.assertEqual(set([product]), set(Product.browsable.all()))
+            product_class=self.product_class, title="Kopfhörer")
+        self.assertEqual(set([product]), set(Product.objects.browsable()))
 
 
 class ChildProductTests(ProductTests):
 
     def setUp(self):
-        super(ChildProductTests, self).setUp()
+        super().setUp()
         self.parent = Product.objects.create(
             title="Parent product",
             product_class=self.product_class,
             structure=Product.PARENT,
             is_discountable=False)
+        ProductAttribute.objects.create(
+            product_class=self.product_class,
+            name='The first attribute',
+            code='first_attribute',
+            type='text')
+        ProductAttribute.objects.create(
+            product_class=self.product_class,
+            name='The second attribute',
+            code='second_attribute',
+            type='text')
 
     def test_child_products_dont_need_titles(self):
         Product.objects.create(
@@ -103,7 +112,44 @@ class ChildProductTests(ProductTests):
         Product.objects.create(
             product_class=self.product_class, parent=self.parent,
             structure=Product.CHILD)
-        self.assertEqual(set([self.parent]), set(Product.browsable.all()))
+        self.assertEqual(set([self.parent]), set(Product.objects.browsable()))
+
+    def test_child_products_attribute_values(self):
+        product = Product.objects.create(
+            product_class=self.product_class, parent=self.parent,
+            structure=Product.CHILD)
+
+        self.parent.attr.first_attribute = "klats"
+        product.attr.second_attribute = "henk"
+        self.parent.save()
+        product.save()
+
+        product = Product.objects.get(pk=product.pk)
+        parent = Product.objects.get(pk=self.parent.pk)
+
+        self.assertEqual(parent.get_attribute_values().count(), 1)
+        self.assertEqual(product.get_attribute_values().count(), 2)
+        self.assertTrue(hasattr(parent.attr, "first_attribute"))
+        self.assertFalse(hasattr(parent.attr, "second_attribute"))
+        self.assertTrue(hasattr(product.attr, "first_attribute"))
+        self.assertTrue(hasattr(product.attr, "second_attribute"))
+
+    def test_child_products_attribute_values_no_parent_values(self):
+        product = Product.objects.create(
+            product_class=self.product_class, parent=self.parent,
+            structure=Product.CHILD)
+
+        product.attr.second_attribute = "henk"
+        product.save()
+
+        product = Product.objects.get(pk=product.pk)
+
+        self.assertEqual(self.parent.get_attribute_values().count(), 0)
+        self.assertEqual(product.get_attribute_values().count(), 1)
+        self.assertFalse(hasattr(self.parent.attr, "first_attribute"))
+        self.assertFalse(hasattr(self.parent.attr, "second_attribute"))
+        self.assertFalse(hasattr(product.attr, "first_attribute"))
+        self.assertTrue(hasattr(product.attr, "second_attribute"))
 
 
 class TestAChildProduct(TestCase):
@@ -149,7 +195,7 @@ class ProductAttributeCreationTests(TestCase):
 class ProductRecommendationTests(ProductTests):
 
     def setUp(self):
-        super(ProductRecommendationTests, self).setUp()
+        super().setUp()
         self.primary_product = Product.objects.create(
             upc='1234', product_class=self.product_class, title='Primary Product'
         )

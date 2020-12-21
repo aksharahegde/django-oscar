@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponseRedirect
 from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.views import generic
 
 from oscar.core.loading import get_classes, get_model
@@ -19,7 +19,7 @@ ProductReview = get_model('reviews', 'productreview')
 
 class ReviewListView(BulkEditMixin, generic.ListView):
     model = ProductReview
-    template_name = 'dashboard/reviews/review_list.html'
+    template_name = 'oscar/dashboard/reviews/review_list.html'
     context_object_name = 'review_list'
     form_class = ProductReviewSearchForm
     review_form_class = DashboardProductReviewForm
@@ -30,7 +30,7 @@ class ReviewListView(BulkEditMixin, generic.ListView):
                       "%(kw_filter)s %(name_filter)s")
 
     def get(self, request, *args, **kwargs):
-        response = super(ReviewListView, self).get(request, **kwargs)
+        response = super().get(request, **kwargs)
         self.form = self.form_class()
         return response
 
@@ -68,7 +68,7 @@ class ReviewListView(BulkEditMixin, generic.ListView):
     def get_queryset(self):
         queryset = self.model.objects.select_related('product', 'user').all()
         queryset = sort_queryset(
-            queryset, self.request, ['score', 'total_votes', 'date_created'])
+            queryset, self.request, ['date_created', 'score', 'total_votes'], default='-date_created')
         self.desc_ctx = {
             'main_filter': _('All reviews'),
             'date_filter': '',
@@ -106,8 +106,8 @@ class ReviewListView(BulkEditMixin, generic.ListView):
     def add_filter_keyword(self, queryset, keyword):
         if keyword:
             queryset = queryset.filter(
-                Q(title__icontains=keyword) |
-                Q(body__icontains=keyword)
+                Q(title__icontains=keyword)
+                | Q(body__icontains=keyword)
             ).distinct()
             self.desc_ctx['kw_filter'] \
                 = _(" with keyword matching '%s'") % keyword
@@ -125,8 +125,8 @@ class ReviewListView(BulkEditMixin, generic.ListView):
                 ).distinct()
             else:
                 queryset = queryset.filter(
-                    Q(user__first_name__istartswith=parts[0]) |
-                    Q(user__last_name__istartswith=parts[-1])
+                    Q(user__first_name__istartswith=parts[0])
+                    | Q(user__last_name__istartswith=parts[-1])
                 ).distinct()
             self.desc_ctx['name_filter'] \
                 = _(" with customer name matching '%s'") % name
@@ -134,7 +134,7 @@ class ReviewListView(BulkEditMixin, generic.ListView):
         return queryset
 
     def get_context_data(self, **kwargs):
-        context = super(ReviewListView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['review_form'] = self.review_form_class()
         context['form'] = self.form
         context['description'] = self.desc_template % self.desc_ctx
@@ -155,7 +155,7 @@ class ReviewListView(BulkEditMixin, generic.ListView):
 
 class ReviewUpdateView(generic.UpdateView):
     model = ProductReview
-    template_name = 'dashboard/reviews/review_update.html'
+    template_name = 'oscar/dashboard/reviews/review_update.html'
     form_class = DashboardProductReviewForm
     context_object_name = 'review'
 
@@ -165,7 +165,7 @@ class ReviewUpdateView(generic.UpdateView):
 
 class ReviewDeleteView(generic.DeleteView):
     model = ProductReview
-    template_name = 'dashboard/reviews/review_delete.html'
+    template_name = 'oscar/dashboard/reviews/review_delete.html'
     context_object_name = 'review'
 
     def get_success_url(self):

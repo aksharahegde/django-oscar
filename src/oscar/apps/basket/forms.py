@@ -1,33 +1,72 @@
 from django import forms
 from django.conf import settings
 from django.db.models import Sum
-from django.utils.translation import ugettext_lazy as _
+from django.forms.utils import ErrorDict
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_model
 from oscar.forms import widgets
 
 Line = get_model('basket', 'line')
 Basket = get_model('basket', 'basket')
+Option = get_model('catalogue', 'option')
 Product = get_model('catalogue', 'product')
 
 
+def _option_text_field(option):
+    return forms.CharField(label=option.name, required=option.required)
+
+
+def _option_integer_field(option):
+    return forms.IntegerField(label=option.name, required=option.required)
+
+
+def _option_boolean_field(option):
+    return forms.BooleanField(label=option.name, required=option.required)
+
+
+def _option_float_field(option):
+    return forms.FloatField(label=option.name, required=option.required)
+
+
+def _option_date_field(option):
+    return forms.DateField(label=option.name, required=option.required, widget=forms.widgets.DateInput)
+
+
 class BasketLineForm(forms.ModelForm):
+
     save_for_later = forms.BooleanField(
         initial=False, required=False, label=_('Save for Later'))
 
     def __init__(self, strategy, *args, **kwargs):
-        super(BasketLineForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.instance.strategy = strategy
 
-        max_allowed_quantity = None
-        num_available = getattr(self.instance.purchase_info.availability, 'num_available', None)
-        basket_max_allowed_quantity = self.instance.basket.max_allowed_quantity()[0]
-        if all([num_available, basket_max_allowed_quantity]):
-            max_allowed_quantity = min(num_available, basket_max_allowed_quantity)
-        else:
-            max_allowed_quantity = num_available or basket_max_allowed_quantity
-        if max_allowed_quantity:
-            self.fields['quantity'].widget.attrs['max'] = max_allowed_quantity
+        # Evaluate max allowed quantity check only if line still exists, in
+        # order to avoid check run against missing instance -
+        # https://github.com/django-oscar/django-oscar/issues/2873.
+        if self.instance.id:
+            max_allowed_quantity = None
+            num_available = getattr(self.instance.purchase_info.availability, 'num_available', None)
+            basket_max_allowed_quantity = self.instance.basket.max_allowed_quantity()[0]
+            if all([num_available, basket_max_allowed_quantity]):
+                max_allowed_quantity = min(num_available, basket_max_allowed_quantity)
+            else:
+                max_allowed_quantity = num_available or basket_max_allowed_quantity
+            if max_allowed_quantity:
+                self.fields['quantity'].widget.attrs['max'] = max_allowed_quantity
+
+    def full_clean(self):
+        if not self.instance.id:
+            self.cleaned_data = {}
+            self._errors = ErrorDict()
+            return
+        return super().full_clean()
+
+    def has_changed(self):
+        if not self.instance.id:
+            return False
+        return super().has_changed()
 
     def clean_quantity(self):
         qty = self.cleaned_data['quantity']
@@ -70,10 +109,10 @@ class SavedLineForm(forms.ModelForm):
     def __init__(self, strategy, basket, *args, **kwargs):
         self.strategy = strategy
         self.basket = basket
-        super(SavedLineForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def clean(self):
-        cleaned_data = super(SavedLineForm, self).clean()
+        cleaned_data = super().clean()
         if not cleaned_data['move_to_basket']:
             # skip further validation (see issue #666)
             return cleaned_data
@@ -96,13 +135,22 @@ class BasketVoucherForm(forms.Form):
     code = forms.CharField(max_length=128, label=_('Code'))
 
     def __init__(self, *args, **kwargs):
-        super(BasketVoucherForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def clean_code(self):
         return self.cleaned_data['code'].strip().upper()
 
 
 class AddToBasketForm(forms.Form):
+
+    OPTION_FIELD_FACTORIES = {
+        Option.TEXT: _option_text_field,
+        Option.INTEGER: _option_integer_field,
+        Option.BOOLEAN: _option_boolean_field,
+        Option.FLOAT: _option_float_field,
+        Option.DATE: _option_date_field,
+    }
+
     quantity = forms.IntegerField(initial=1, min_value=1, label=_('Quantity'))
 
     def __init__(self, basket, product, *args, **kwargs):
@@ -113,7 +161,7 @@ class AddToBasketForm(forms.Form):
         self.basket = basket
         self.parent_product = product
 
-        super(AddToBasketForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Dynamically build fields
         if product.is_parent:
@@ -131,7 +179,7 @@ class AddToBasketForm(forms.Form):
         """
         choices = []
         disabled_values = []
-        for child in product.children.all():
+        for child in product.children.public():
             # Build a description of the child, including any pertinent
             # attributes
             attr_summary = child.attribute_summary
@@ -165,8 +213,8 @@ class AddToBasketForm(forms.Form):
         This is designed to be overridden so that specific widgets can be used
         for certain types of options.
         """
-        self.fields[option.code] = forms.CharField(
-            label=option.name, required=option.is_required)
+        option_field = self.OPTION_FIELD_FACTORIES.get(option.type, Option.TEXT)(option)
+        self.fields[option.code] = option_field
 
     # Cleaning
 
@@ -219,8 +267,8 @@ class AddToBasketForm(forms.Form):
                   "price could not be determined for it."))
 
         # Check currencies are sensible
-        if (self.basket.currency and
-                info.price.currency != self.basket.currency):
+        if (self.basket.currency
+                and info.price.currency != self.basket.currency):
             raise forms.ValidationError(
                 _("This product cannot be added to the basket as its currency "
                   "isn't the same as other products in your basket"))
@@ -251,17 +299,22 @@ class AddToBasketForm(forms.Form):
         return options
 
 
-class SimpleAddToBasketForm(AddToBasketForm):
+class SimpleAddToBasketMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'quantity' in self.fields:
+            self.fields['quantity'].initial = 1
+            self.fields['quantity'].widget = forms.HiddenInput()
+
+
+class SimpleAddToBasketForm(SimpleAddToBasketMixin, AddToBasketForm):
     """
     Simplified version of the add to basket form where the quantity is
     defaulted to 1 and rendered in a hidden widget
 
-    Most of the time, you won't need to override this class. Just change
-    AddToBasketForm to change behaviour in both forms at once.
-    """
+    If you changed `AddToBasketForm`, you'll need to override this class
+    as well by doing:
 
-    def __init__(self, *args, **kwargs):
-        super(SimpleAddToBasketForm, self).__init__(*args, **kwargs)
-        if 'quantity' in self.fields:
-            self.fields['quantity'].initial = 1
-            self.fields['quantity'].widget = forms.HiddenInput()
+    class SimpleAddToBasketForm(SimpleAddToBasketMixin, AddToBasketForm):
+        pass
+    """

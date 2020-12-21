@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 import pytest
-from django.test import TestCase
 from django.core import exceptions
+from django.test import TestCase
 
+from oscar.apps.address import models
 from oscar.apps.order.models import ShippingAddress
 from oscar.core.compat import get_user_model
-from oscar.apps.address import models
 from oscar.test import factories
-
 from tests._site.model_tests_app.models import (
-    UserAddressModelWithCustomBaseFields, UserAddressModelWithCustomHashFields
-)
+    UserAddressModelWithCustomBaseFields, UserAddressModelWithCustomHashFields)
 
 User = get_user_model()
 
@@ -104,10 +102,10 @@ class TestUserAddress(TestCase):
 
     def test_can_be_hashed_including_non_ascii(self):
         a = factories.UserAddressFactory.build(
-            first_name=u"\u0141ukasz Smith",
-            last_name=u'Smith',
-            line1=u"75 Smith Road",
-            postcode=u"n4 8ty",
+            first_name="\u0141ukasz Smith",
+            last_name='Smith',
+            line1="75 Smith Road",
+            postcode="n4 8ty",
             country=self.country,
             user=self.user)
         hash = a.generate_hash()
@@ -227,6 +225,8 @@ VALID_POSTCODES = [
     ('BN', 'BC3615'),
     ('TW', '104'),
     ('TW', '10444'),
+    ('IL', '1029200'),
+    ('IL', '94142'),
     # It works for small cases as well
     ('GB', 'sw2 1rw'),
 ]

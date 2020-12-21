@@ -3,7 +3,7 @@ Core functionality
 ==================
 
 This page details the core classes and functions that Oscar uses.  These aren't
-specific to one particular app, but are used throughout Oscar's codebase.
+specific to one particular app, but are used throughout Oscar.
 
 Dynamic class loading
 ---------------------
@@ -18,7 +18,7 @@ core functionality.
 URL patterns and views
 ----------------------
 
-Oscar's app organise their URLs and associated views using a "Application"
+Oscar's apps organise their URLs and associated views using a "OscarConfig"
 class instance.  This works in a similar way to Django's admin app, and allows
 Oscar projects to subclass and customised URLs and views.
 
@@ -40,6 +40,7 @@ Oscar uses a few custom model fields.
 
 .. automodule:: oscar.models.fields
     :members:
+    :exclude-members: contribute_to_class, deconstruct, get_prep_value, to_python, formfield
 
 
 Form helpers

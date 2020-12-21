@@ -1,4 +1,4 @@
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_class, get_model
 
@@ -30,14 +30,14 @@ class OpenBasketReportCSVFormatter(ReportCSVFormatter):
             if basket.owner:
                 row = [basket.owner_id, basket.owner.get_full_name(),
                        basket.owner.email,
-                       basket.status, basket.num_lines,
+                       basket.status, basket.num_lines, basket.num_items,
                        self.format_datetime(basket.date_created),
                        basket.time_since_creation]
             else:
                 row = [basket.owner_id, None, None, basket.status,
                        basket.num_lines, basket.num_items,
                        self.format_datetime(basket.date_created),
-                       basket.time_since_creation]
+                       self.format_timedelta(basket.time_since_creation)]
             writer.writerow(row)
 
     def filename(self, **kwargs):
@@ -46,7 +46,7 @@ class OpenBasketReportCSVFormatter(ReportCSVFormatter):
 
 
 class OpenBasketReportHTMLFormatter(ReportHTMLFormatter):
-    filename_template = 'dashboard/reports/partials/open_basket_report.html'
+    filename_template = 'oscar/dashboard/reports/partials/open_basket_report.html'
 
 
 class OpenBasketReportGenerator(ReportGenerator):
@@ -56,6 +56,7 @@ class OpenBasketReportGenerator(ReportGenerator):
     code = 'open_baskets'
     description = _('Open baskets')
     date_range_field_name = 'date_created'
+    queryset = Basket._default_manager.filter(status=Basket.OPEN)
 
     formatters = {
         'CSV_formatter': OpenBasketReportCSVFormatter,
@@ -65,8 +66,7 @@ class OpenBasketReportGenerator(ReportGenerator):
         additional_data = {
             'start_date': self.start_date,
             'end_date': self.end_date}
-        baskets = Basket._default_manager.filter(status=Basket.OPEN)
-        return self.formatter.generate_response(baskets, **additional_data)
+        return self.formatter.generate_response(self.queryset, **additional_data)
 
 
 class SubmittedBasketReportCSVFormatter(ReportCSVFormatter):
@@ -100,8 +100,7 @@ class SubmittedBasketReportCSVFormatter(ReportCSVFormatter):
 
 
 class SubmittedBasketReportHTMLFormatter(ReportHTMLFormatter):
-    filename_template = 'dashboard/reports/partials/' \
-        'submitted_basket_report.html'
+    filename_template = 'oscar/dashboard/reports/partials/submitted_basket_report.html'
 
 
 class SubmittedBasketReportGenerator(ReportGenerator):
@@ -111,6 +110,7 @@ class SubmittedBasketReportGenerator(ReportGenerator):
     code = 'submitted_baskets'
     description = _('Submitted baskets')
     date_range_field_name = 'date_submitted'
+    queryset = Basket._default_manager.filter(status=Basket.SUBMITTED)
 
     formatters = {
         'CSV_formatter': SubmittedBasketReportCSVFormatter,
@@ -120,5 +120,4 @@ class SubmittedBasketReportGenerator(ReportGenerator):
         additional_data = {
             'start_date': self.start_date,
             'end_date': self.end_date}
-        baskets = Basket._default_manager.filter(status=Basket.SUBMITTED)
-        return self.formatter.generate_response(baskets, **additional_data)
+        return self.formatter.generate_response(self.queryset, **additional_data)

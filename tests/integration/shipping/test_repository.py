@@ -1,7 +1,8 @@
-from django.test import TestCase
-import mock
+from unittest import mock
 
-from oscar.apps.shipping import repository, methods
+from django.test import TestCase
+
+from oscar.apps.shipping import methods, repository
 
 
 class TestDefaultShippingRepository(TestCase):

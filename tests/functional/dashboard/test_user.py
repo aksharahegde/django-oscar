@@ -1,14 +1,15 @@
 from django.core import mail
-from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _
+from django.urls import reverse, reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from webtest import AppError
 
-from oscar.apps.customer.models import ProductAlert
 from oscar.core.compat import get_user_model
+from oscar.core.loading import get_model
 from oscar.test.factories import ProductAlertFactory, UserFactory
 from oscar.test.testcases import WebTestCase
 
 User = get_user_model()
+ProductAlert = get_model('customer', 'ProductAlert')
 
 
 class IndexViewTests(WebTestCase):
@@ -19,7 +20,7 @@ class IndexViewTests(WebTestCase):
     csrf_checks = False
 
     def setUp(self):
-        super(IndexViewTests, self).setUp()
+        super().setUp()
         for i in range(1, 25):
             UserFactory(is_active=True)
         for i in range(1, 25):
@@ -66,7 +67,7 @@ class TestDetailViewForStaffUser(WebTestCase):
     def setUp(self):
         self.customer = UserFactory(
             username='jane', email='jane@example.org', password='password')
-        super(TestDetailViewForStaffUser, self).setUp()
+        super().setUp()
 
     def test_password_reset_url_only_available_via_post(self):
         try:
@@ -103,7 +104,7 @@ class TestDetailViewForStaffUser(WebTestCase):
 
 class SearchTests(WebTestCase):
     is_staff = True
-    url = reverse('dashboard:users-index')
+    url = reverse_lazy('dashboard:users-index')
 
     def setUp(self):
         UserFactory(
@@ -113,32 +114,33 @@ class SearchTests(WebTestCase):
         UserFactory(
             username='robalan', email='robalan@example.org', first_name='Rob Alan', last_name='Lewis'
         )
-        super(SearchTests, self).setUp()
+        super().setUp()
 
-    def _search_by_user_name(self, name):
+    def _search_by_form_args(self, form_args):
         response = self.get(self.url)
         search_form = response.forms[0]
-        search_form['name'] = name
+        for field_name, val in form_args.items():
+            search_form[field_name] = val
         search_response = search_form.submit('search')
         data = search_response.context['users'].data
         return data
 
     def test_user_name_2_parts(self):
-        data = self._search_by_user_name('Owen Davies')
+        data = self._search_by_form_args({'name': 'Owen Davies'})
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].email, 'owen@example.org')
         self.assertEqual(data[0].first_name, 'Owen')
         self.assertEqual(data[0].last_name, 'Davies')
 
     def test_user_name_3_parts(self):
-        data = self._search_by_user_name('Rob Alan Lewis')
+        data = self._search_by_form_args({'name': 'Rob Alan Lewis'})
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].email, 'robalan@example.org')
         self.assertEqual(data[0].first_name, 'Rob Alan')
         self.assertEqual(data[0].last_name, 'Lewis')
 
     def test_user_name_4_parts(self):
-        data = self._search_by_user_name('Lars van der Berg')
+        data = self._search_by_form_args({'name': 'Lars van der Berg'})
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].email, 'lars@example.org')
         self.assertEqual(data[0].first_name, 'Lars')

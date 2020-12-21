@@ -1,4 +1,4 @@
-{% extends "checkout/checkout.html" %}
+{% extends "oscar/checkout/checkout.html" %}
 {% load i18n %}
 
 {% block title %}
@@ -11,15 +11,15 @@
 {% block payment_details %}{% endblock %}
 
 {% block checkout_nav %}
-    {% include 'checkout/nav.html' with step=1 %}
+    {% include 'oscar/checkout/nav.html' with step=1 %}
 {% endblock %}
 
 {% block checkout_title %}{% trans "Delete address?" %}{% endblock %}
 
 {% block shipping_address %}
-    <form action="." method="post" id="delete_address_{{ object.id }}">
+    <form method="post" id="delete_address_{{ object.id }}">
         {% csrf_token %}
-        <div class="well">
+        <div class="card card-body bg-light">
             <address>
                 {% for field in object.active_address_fields %}
                     {{ field }}<br/>

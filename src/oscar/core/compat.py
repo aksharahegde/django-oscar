@@ -1,21 +1,12 @@
-import codecs
 import csv
-import sys
+import re
 
+from django import template
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
-from django.utils import six
 
 from oscar.core.loading import get_model
-
-
-try:
-    # Python 3
-    from http.cookies import _unquote
-except ImportError:
-    from Cookie import _unquote
-
 
 # A setting that can be used in foreign key declarations
 AUTH_USER_MODEL = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
@@ -32,6 +23,14 @@ try:
 except ValueError:
     raise ImproperlyConfigured("INVOICE_MODEL must be of the form"
                                " 'app_label.model_name'")
+
+
+# Backward-compatible import for url_has_allowed_host_and_scheme.
+try:
+    # Django 3.0 and above
+    from django.utils.http import url_has_allowed_host_and_scheme  # noqa F401
+except ImportError:
+    from django.utils.http import is_safe_url as url_has_allowed_host_and_scheme  # noqa F401 isort:skip
 
 
 def get_user_model():
@@ -86,68 +85,9 @@ def existing_user_fields(fields):
     return [field for field in fields if field in user_field_names]
 
 
-# Python3 compatibility layer
-
-def unquote_cookie(cookie_value):
-    """
-    Make sure a cookie value is unescaped from double quotes
-    """
-    return _unquote(cookie_value)
-
-
-"""
-Unicode compatible wrapper for CSV reader and writer that abstracts away
-differences between Python 2 and 3. A package like unicodecsv would be
-preferable, but it's not Python 3 compatible yet.
-
-Code from http://python3porting.com/problems.html
-Changes:
-- Classes renamed to include CSV.
-- Unused 'codecs' import is dropped.
-- Added possibility to specify an open file to the writer to send as response
-  of a view
-"""
-
-
-PY3 = sys.version > '3'
-
-
-class UnicodeCSVReader:
-    def __init__(self, filename, dialect=csv.excel,
-                 encoding="utf-8", **kw):
-        self.filename = filename
-        self.dialect = dialect
-        self.encoding = encoding
-        self.kw = kw
-
-    def __enter__(self):
-        if PY3:
-            self.f = open(self.filename, 'rt',
-                          encoding=self.encoding, newline='')
-        else:
-            self.f = open(self.filename, 'rbU')
-        self.reader = csv.reader(self.f, dialect=self.dialect,
-                                 **self.kw)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.f.close()
-
-    def next(self):
-        row = next(self.reader)
-        if PY3:
-            return row
-        return [s.decode("utf-8") for s in row]
-
-    __next__ = next
-
-    def __iter__(self):
-        return self
-
-
 class UnicodeCSVWriter:
     """
-    Python 2 and 3 compatible CSV writer. Supports two modes:
+    MS Excel compatible CSV writer. Supports two modes:
     * Writing to an open file or file-like object:
       writer = UnicodeCSVWriter(open_file=your_file)
       ...
@@ -173,12 +113,7 @@ class UnicodeCSVWriter:
 
     def __enter__(self):
         assert self.filename is not None
-        if PY3:
-            self.f = open(self.filename, 'wt',
-                          encoding=self.encoding, newline='')
-        else:
-            self.f = open(self.filename, 'wb')
-
+        self.f = open(self.filename, 'wt', encoding=self.encoding, newline='')
         self.add_bom(self.f)
         return self
 
@@ -192,15 +127,29 @@ class UnicodeCSVWriter:
         # file for compatibility with MS Excel.
         if (self.encoding == 'utf-8'
                 and getattr(settings, 'OSCAR_CSV_INCLUDE_BOM', False)):
-            self.f.write(u'\ufeff' if PY3 else codecs.BOM_UTF8)
+            self.f.write('\ufeff')
 
     def writerow(self, row):
         if self.writer is None:
             self.writer = csv.writer(self.f, dialect=self.dialect, **self.kw)
-        if not PY3:
-            row = [six.text_type(s).encode(self.encoding) for s in row]
         self.writer.writerow(list(row))
 
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
+
+
+class FormFieldNode(template.Node):
+    """"
+    Add the widget type to a BoundField. Until 3.1, Django did not make this available by default.
+
+    Used by `oscar.templatetags.form_tags.annotate_form_field`
+    """
+    def __init__(self, field_str):
+        self.field = template.Variable(field_str)
+
+    def render(self, context):
+        field = self.field.resolve(context)
+        if not hasattr(field, 'widget_type') and hasattr(field, 'field'):
+            field.widget_type = re.sub(r'widget$|input$', '', field.field.widget.__class__.__name__.lower())
+        return ''

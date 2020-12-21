@@ -1,16 +1,15 @@
 from decimal import Decimal as D
+from unittest.mock import Mock
 
 from django.test import TestCase
-from mock import Mock
 
 from oscar.apps.offer import models
 from oscar.apps.offer.results import OfferApplications
 from oscar.apps.offer.utils import Applicator
-from oscar.test.factories import (
-    BasketFactory, RangeFactory, BenefitFactory, ConditionFactory,
-    ConditionalOfferFactory)
-
 from oscar.test.basket import add_product
+from oscar.test.factories import (
+    BasketFactory, BenefitFactory, ConditionalOfferFactory, ConditionFactory,
+    RangeFactory)
 
 
 class TestOfferApplicator(TestCase):
@@ -24,15 +23,15 @@ class TestOfferApplicator(TestCase):
             value=D('100'), proxy_class=None)
         self.benefit = BenefitFactory(
             range=rng, type=BenefitFactory._meta.model.FIXED,
-            value=D('10'), max_affected_items=1)
+            value=D('10'))
 
     def test_applies_offer_multiple_times_by_default(self):
         add_product(self.basket, D('100'), 5)
         offer = ConditionalOfferFactory(
             pk=1, condition=self.condition, benefit=self.benefit)
         self.applicator.apply_offers(self.basket, [offer])
-        applications = self.basket.offer_applications.applications
-        self.assertEqual(5, applications[1]['freq'])
+        line = self.basket.all_lines()[0]
+        self.assertTrue(line.quantity_with_offer_discount(offer) == 5)
 
     def test_respects_maximum_applications_field(self):
         add_product(self.basket, D('100'), 5)
@@ -40,8 +39,10 @@ class TestOfferApplicator(TestCase):
             pk=1, condition=self.condition, benefit=self.benefit,
             max_basket_applications=1)
         self.applicator.apply_offers(self.basket, [offer])
+        line = self.basket.all_lines()[0]
+        self.assertTrue(line.quantity_with_offer_discount(offer) == 5)
         applications = self.basket.offer_applications.applications
-        self.assertEqual(1, applications[1]['freq'])
+        self.assertTrue(applications[1]['freq'] == 1)
 
     def test_uses_offers_in_order_of_descending_priority(self):
         self.applicator.get_site_offers = Mock(

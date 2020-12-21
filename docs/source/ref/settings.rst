@@ -26,7 +26,7 @@ The tagline that is displayed next to the shop name and in the browser title.
 ``OSCAR_HOMEPAGE``
 ------------------
 
-Default: ``reverse_lazy('promotions:home')``
+Default: ``reverse_lazy('catalogue:index')``
 
 URL of home page of your site. This value is used for `Home` link in
 navigation and redirection page after logout. Useful if you use a different app
@@ -111,10 +111,10 @@ The default is::
                  'queries': [
                      # This is a list of (name, query) tuples where the name will
                      # be displayed on the front-end.
-                     (_('0 to 20'), u'[0 TO 20]'),
-                     (_('20 to 40'), u'[20 TO 40]'),
-                     (_('40 to 60'), u'[40 TO 60]'),
-                     (_('60+'), u'[60 TO *]'),
+                     (_('0 to 20'), '[0 TO 20]'),
+                     (_('20 to 40'), '[20 TO 40]'),
+                     (_('40 to 60'), '[40 TO 60]'),
+                     (_('60+'), '[60 TO *]'),
                  ]
              }),
         ]),
@@ -126,21 +126,7 @@ The default is::
 The search handler to be used in the product list views. If ``None``,
 Oscar tries to guess the correct handler based on your Haystack settings.
 
-Default::
-
-    None
-
-``OSCAR_PROMOTION_POSITIONS``
------------------------------
-
-Default::
-
-    OSCAR_PROMOTION_POSITIONS = (('page', 'Page'),
-                                 ('right', 'Right-hand sidebar'),
-                                 ('left', 'Left-hand sidebar'))
-
-The choice of display locations available when editing a promotion. Only
-useful when using a new set of templates.
+Default::  ``None``
 
 .. _OSCAR_DASHBOARD_NAVIGATION:
 
@@ -304,7 +290,15 @@ Default: ``None``
 
 A URL which is passed into the templates for communication events.  It is not
 used in Oscar's default templates but could be used to include static assets
-(eg images) in a HTML email template.
+(e.g. images) in a HTML email template.
+
+``OSCAR_SAVE_SENT_EMAILS_TO_DB``
+--------------------------------
+
+Default: ``True``
+
+Indicates if sent emails will be saved to database as instances of
+``oscar.apps.communication.models.Email``.
 
 Offer settings
 ==============
@@ -314,8 +308,20 @@ Offer settings
 
 Default: Round down to the nearest hundredth of a unit using ``decimal.Decimal.quantize``
 
-A function responsible for rounding decimal amounts when offer discount
-calculations don't lead to legitimate currency values.
+A dotted path to a function responsible for rounding decimal amounts
+when offer discount calculations don't lead to legitimate currency values.
+
+``OSCAR_OFFERS_INCL_TAX``
+
+Default: ``False``
+
+If ``True``, offers will be applied to prices including taxes instead of on
+prices excluding tax. Oscar used to always calculate offers on prices excluding
+tax so the default is ``False``. This setting also affects the meaning of
+absolute prices in offers. So a flat discount of 10 pounds in an offer will
+be treated as 10 pounds before taxes if ``OSCAR_OFFERS_INCL_TAX`` remains
+``False`` and 10 pounds after taxes if ``OSCAR_OFFERS_INCL_TAX`` is set to
+``True``.
 
 Basket settings
 ===============
@@ -332,8 +338,8 @@ The time to live for the basket cookie in seconds.
 
 Default: ``10000``
 
-The maximum number of products that can be added to a basket at once. Set to 
-``None`` to disable the basket treshold limitation.
+The maximum number of products that can be added to a basket at once. Set to
+``None`` to disable the basket threshold limitation.
 
 
 ``OSCAR_BASKET_COOKIE_OPEN``
@@ -371,7 +377,7 @@ For example::
             'format_type': "accounting",
         },
         'EUR': {
-            'format': u'#,##0\xa0¤',
+            'format': '#,##0\xa0¤',
         }
     }
 
@@ -399,14 +405,6 @@ If enabled, a ``post_delete`` hook will attempt to delete any image files and
 created thumbnails when a model with an ``ImageField`` is deleted. This is
 usually desired, but might not be what you want when using a remote storage.
 
-
-``OSCAR_PROMOTION_FOLDER``
---------------------------
-
-Default: ``images/promotions/``
-
-The folder within ``MEDIA_ROOT`` used for uploaded promotion images.
-
 .. _missing-image-label:
 
 ``OSCAR_MISSING_IMAGE_URL``
@@ -415,71 +413,85 @@ The folder within ``MEDIA_ROOT`` used for uploaded promotion images.
 Default: ``image_not_found.jpg``
 
 Copy this image from ``oscar/static/img`` to your ``MEDIA_ROOT`` folder. It needs to
-be there so Sorl can resize it.
+be there so the thumbnailer can resize it.
 
-``OSCAR_UPLOAD_ROOT``
+
+``OSCAR_THUMBNAILER``
 ---------------------
 
-Default: ``/tmp``
+Default: ``'oscar.core.thumbnails.SorlThumbnail'``
 
-The folder is used to temporarily hold uploaded files until they are processed.
-Such files should always be deleted afterwards.
+Thumbnailer class that will be used to generate thumbnails. Available options:
+``SorlThumbnail`` and ``EasyThumbnails``. To use them ``sorl-thumbnail`` or
+``easy-thumbnails`` must be installed manually or with ``pip install django-oscar[sorl-thumbnail]`` or
+``pip install django-oscar[easy-thumbnails]``. Custom thumbnailer class (based on
+``oscar.core.thumbnails.AbstractThumbnailer``) can be used as well.
+
+``OSCAR_THUMBNAIL_DEBUG``
+-------------------------
+
+Default: Same as ``DEBUG``
+
+When set to ``True`` the ``ThumbnailNode.render`` method can raise errors. Django recommends that tags never raise errors in the ``Node.render`` method in production.
 
 Slug settings
 =============
-
-``OSCAR_SLUG_MAP``
-------------------
-
-Default: ``{}``
-
-A dictionary to map strings to more readable versions for including in URL
-slugs.  This mapping is appled before the slugify function.
-This is useful when names contain characters which would normally be
-stripped.  For instance::
-
-    OSCAR_SLUG_MAP = {
-        'c++': 'cpp',
-        'f#': 'fsharp',
-    }
 
 ``OSCAR_SLUG_FUNCTION``
 -----------------------
 
 Default: ``'oscar.core.utils.default_slugifier'``
 
-The slugify function to use.  Note that is used within Oscar's slugify wrapper
-(in ``oscar.core.utils``) which applies the custom map and blacklist. String
-notation is recommended, but specifying a callable is supported for
-backwards-compatibility.
+A dotted path to the :py:func:`slugify <oscar.core.utils.default_slugifier>` function to use.
 
 Example::
 
     # in myproject.utils
-    def some_slugify(value):
+    def some_slugify(value, allow_unicode=False):
         return value
 
     # in settings.py
     OSCAR_SLUG_FUNCTION = 'myproject.utils.some_slugify'
 
+``OSCAR_SLUG_MAP``
+------------------
+
+Default: ``{}``
+
+A dictionary to target:replacement strings that the :py:func:`slugify <oscar.core.utils.default_slugifier>` function will
+apply before slugifying the value. This is useful when names contain
+characters which would normally be stripped. For instance::
+
+    OSCAR_SLUG_MAP = {
+        'c++': 'cpp',
+        'f#': 'fsharp',
+    }
 
 ``OSCAR_SLUG_BLACKLIST``
 ------------------------
 
 Default: ``[]``
 
-A list of words to exclude from slugs.
+An iterable of words the :py:func:`slugify <oscar.core.utils.default_slugifier>` function will try to remove after the value
+has been slugified. Note, a word will not be removed from the slug if it would
+result in an empty slug.
 
 Example::
 
-    OSCAR_SLUG_BLACKLIST = ['the', 'a', 'but']
+    # With OSCAR_SLUG_BLACKLIST = ['the']
+    slugify('The cat')
+    > 'cat'
+
+    # With OSCAR_SLUG_BLACKLIST = ['the', 'cat']
+    slugify('The cat')
+    > 'cat'
 
 ``OSCAR_SLUG_ALLOW_UNICODE``
 ----------------------------
 
 Default: ``False``
 
-Allows unicode characters in slugs generated by ``AutoSlugField``,
+Allows Unicode characters in slugs generated by ``AutoSlugField``,
 which is supported by the underlying ``SlugField`` in Django>=1.9.
 
 
@@ -512,12 +524,6 @@ context. If setting is set, enables Universal Analytics tracking code for page v
 transactions.
 
 
-``OSCAR_USE_LESS``
-------------------
-
-Allows to use raw LESS styles directly. Refer to :ref:`less-css` document for more details.
-
-
 ``OSCAR_CSV_INCLUDE_BOM``
 -------------------------
 
@@ -526,3 +532,11 @@ Default: ``False``
 A flag to control whether Oscar's CSV writer should prepend a byte order mark
 (BOM) to CSV files that are encoded in UTF-8. Useful for compatibility with some
 CSV readers, Microsoft Excel in particular.
+
+
+``OSCAR_URL_SCHEMA``
+--------------------
+
+Default: ``http``
+
+The schema that will be used to build absolute url in ``absolute_url`` template tag.

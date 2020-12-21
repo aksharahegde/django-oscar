@@ -4,6 +4,7 @@ from oscar.core.loading import get_model
 
 Order = get_model('order', 'Order')
 OrderNote = get_model('order', 'OrderNote')
+OrderStatusChange = get_model('order', 'OrderStatusChange')
 CommunicationEvent = get_model('order', 'CommunicationEvent')
 BillingAddress = get_model('order', 'BillingAddress')
 ShippingAddress = get_model('order', 'ShippingAddress')
@@ -16,6 +17,7 @@ PaymentEventType = get_model('order', 'PaymentEventType')
 PaymentEventQuantity = get_model('order', 'PaymentEventQuantity')
 LineAttribute = get_model('order', 'LineAttribute')
 OrderDiscount = get_model('order', 'OrderDiscount')
+Surcharge = get_model('order', 'Surcharge')
 
 
 class LineInline(admin.TabularInline):
@@ -66,8 +68,13 @@ class OrderDiscountAdmin(admin.ModelAdmin):
                     'voucher_code', 'amount')
 
 
+class SurchargeAdmin(admin.ModelAdmin):
+    raw_id_fields = ("order",)
+
+
 admin.site.register(Order, OrderAdmin)
 admin.site.register(OrderNote)
+admin.site.register(OrderStatusChange)
 admin.site.register(ShippingAddress)
 admin.site.register(Line, LineAdmin)
 admin.site.register(LinePrice, LinePriceAdmin)
@@ -79,3 +86,4 @@ admin.site.register(LineAttribute)
 admin.site.register(OrderDiscount, OrderDiscountAdmin)
 admin.site.register(CommunicationEvent)
 admin.site.register(BillingAddress)
+admin.site.register(Surcharge, SurchargeAdmin)

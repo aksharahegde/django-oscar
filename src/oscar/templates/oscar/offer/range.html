@@ -1,21 +1,22 @@
-{% extends "layout.html" %}
+{% extends "oscar/layout.html" %}
 {% load basket_tags %}
 {% load category_tags %}
-{% load product_tags %}
 {% load i18n %}
-{% load staticfiles %}
+{% load product_tags %}
 
 {% block title %}
     {{ range.name }} | {{ block.super }}
 {% endblock %}
 
 {% block breadcrumbs %}
-    <ul class="breadcrumb">
-        <li>
-            <a href="{{ homepage_url }}">{% trans "Home" %}</a>
-        </li>
-        <li class="active">{{ range.name }}</li>
-    </ul>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ homepage_url }}">{% trans "Home" %}</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">{{ range.name }}</li>
+        </ol>
+    </nav>
 {% endblock breadcrumbs %}
 
 {% block headertext %}{{ range.name }}{% endblock %}
@@ -27,12 +28,12 @@
     {% if products %}
         <section>
             <div>
-                <ol class="row">
+                <ol class="row list-unstyled ml-0 pl-0">
                     {% for product in products %}
-                        <li class="col-xs-6 col-sm-4 col-md-3 col-lg-3">{% render_product product %}</li>
+                        <li class="col-sm-4 col-md-3 col-lg-3">{% render_product product %}</li>
                     {% endfor %}
                 </ol>
-                {% include "partials/pagination.html" %}
+                {% include "oscar/partials/pagination.html" %}
             </div>
         </section>
     {% else %}

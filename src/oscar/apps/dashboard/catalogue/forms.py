@@ -1,9 +1,9 @@
 from django import forms
 from django.core import exceptions
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from treebeard.forms import movenodeform_factory
 
-from oscar.core.loading import get_class, get_model
+from oscar.core.loading import get_class, get_classes, get_model
 from oscar.core.utils import slugify
 from oscar.forms.widgets import DateTimePickerInput, ImageInput
 
@@ -17,13 +17,40 @@ ProductImage = get_model('catalogue', 'ProductImage')
 ProductRecommendation = get_model('catalogue', 'ProductRecommendation')
 AttributeOptionGroup = get_model('catalogue', 'AttributeOptionGroup')
 AttributeOption = get_model('catalogue', 'AttributeOption')
+Option = get_model('catalogue', 'Option')
 ProductSelect = get_class('dashboard.catalogue.widgets', 'ProductSelect')
-RelatedFieldWidgetWrapper = get_class('dashboard.widgets',
-                                      'RelatedFieldWidgetWrapper')
+(RelatedFieldWidgetWrapper,
+ RelatedMultipleFieldWidgetWrapper) = get_classes('dashboard.widgets',
+                                                  ('RelatedFieldWidgetWrapper',
+                                                   'RelatedMultipleFieldWidgetWrapper'))
 
-CategoryForm = movenodeform_factory(
+
+BaseCategoryForm = movenodeform_factory(
     Category,
-    fields=['name', 'description', 'image'])
+    fields=['name', 'slug', 'description', 'image', 'is_public', 'meta_title', 'meta_description'],
+    exclude=['ancestors_are_public'],
+    widgets={'meta_description': forms.Textarea(attrs={'class': 'no-widget-init'})})
+
+
+class SEOFormMixin:
+    seo_fields = ['meta_title', 'meta_description', 'slug']
+
+    def primary_form_fields(self):
+        return [field for field in self if not field.is_hidden and not self.is_seo_field(field)]
+
+    def seo_form_fields(self):
+        return [field for field in self if self.is_seo_field(field)]
+
+    def is_seo_field(self, field):
+        return field.name in self.seo_fields
+
+
+class CategoryForm(SEOFormMixin, BaseCategoryForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'slug' in self.fields:
+            self.fields['slug'].required = False
+            self.fields['slug'].help_text = _('Leave blank to generate from category name')
 
 
 class ProductClassSelectForm(forms.Form):
@@ -40,19 +67,19 @@ class ProductClassSelectForm(forms.Form):
         """
         If there's only one product class, pre-select it
         """
-        super(ProductClassSelectForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         qs = self.fields['product_class'].queryset
         if not kwargs.get('initial') and len(qs) == 1:
             self.fields['product_class'].initial = qs[0]
 
 
 class ProductSearchForm(forms.Form):
-    upc = forms.CharField(max_length=16, required=False, label=_('UPC'))
+    upc = forms.CharField(max_length=64, required=False, label=_('UPC'))
     title = forms.CharField(
         max_length=255, required=False, label=_('Product title'))
 
     def clean(self):
-        cleaned_data = super(ProductSearchForm, self).clean()
+        cleaned_data = super().clean()
         cleaned_data['upc'] = cleaned_data['upc'].strip()
         cleaned_data['title'] = cleaned_data['title'].strip()
         return cleaned_data
@@ -64,7 +91,7 @@ class StockRecordForm(forms.ModelForm):
         # The user kwarg is not used by stock StockRecordForm. We pass it
         # anyway in case one wishes to customise the partner queryset
         self.user = user
-        super(StockRecordForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Restrict accessible partners for non-staff users
         if not self.user.is_staff:
@@ -72,11 +99,11 @@ class StockRecordForm(forms.ModelForm):
 
         # If not tracking stock, we hide the fields
         if not product_class.track_stock:
-            for field_name in ['num_in_stock', 'low_stock_treshold']:
+            for field_name in ['num_in_stock', 'low_stock_threshold']:
                 if field_name in self.fields:
                     del self.fields[field_name]
         else:
-            for field_name in ['price_excl_tax', 'num_in_stock']:
+            for field_name in ['price', 'num_in_stock']:
                 if field_name in self.fields:
                     self.fields[field_name].required = True
 
@@ -84,7 +111,7 @@ class StockRecordForm(forms.ModelForm):
         model = StockRecord
         fields = [
             'partner', 'partner_sku',
-            'price_currency', 'price_excl_tax', 'price_retail', 'cost_price',
+            'price_currency', 'price',
             'num_in_stock', 'low_stock_threshold',
         ]
 
@@ -164,7 +191,7 @@ def _attr_image_field(attribute):
         label=attribute.name, required=attribute.required)
 
 
-class ProductForm(forms.ModelForm):
+class ProductForm(SEOFormMixin, forms.ModelForm):
     FIELD_FACTORIES = {
         "text": _attr_text_field,
         "richtext": _attr_textarea_field,
@@ -184,14 +211,16 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            'title', 'upc', 'description', 'is_discountable', 'structure']
+            'title', 'upc', 'description', 'is_public', 'is_discountable', 'structure', 'slug', 'meta_title',
+            'meta_description']
         widgets = {
-            'structure': forms.HiddenInput()
+            'structure': forms.HiddenInput(),
+            'meta_description': forms.Textarea(attrs={'class': 'no-widget-init'})
         }
 
     def __init__(self, product_class, data=None, parent=None, *args, **kwargs):
         self.set_initial(product_class, parent, kwargs)
-        super(ProductForm, self).__init__(data, *args, **kwargs)
+        super().__init__(data, *args, **kwargs)
         if parent:
             self.instance.parent = parent
             # We need to set the correct product structures explicitly to pass
@@ -206,6 +235,9 @@ class ProductForm(forms.ModelForm):
             self.instance.product_class = product_class
         self.add_attribute_fields(product_class, self.instance.is_parent)
 
+        if 'slug' in self.fields:
+            self.fields['slug'].required = False
+            self.fields['slug'].help_text = _('Leave blank to generate from product title')
         if 'title' in self.fields:
             self.fields['title'].widget = forms.TextInput(
                 attrs={'autocomplete': 'off'})
@@ -272,14 +304,13 @@ class ProductForm(forms.ModelForm):
         Set attributes before ModelForm calls the product's clean method
         (which it does in _post_clean), which in turn validates attributes.
         """
-        self.instance.attr.initiate_attributes()
         for attribute in self.instance.attr.get_all_attributes():
             field_name = 'attr_%s' % attribute.code
             # An empty text field won't show up in cleaned_data.
             if field_name in self.cleaned_data:
                 value = self.cleaned_data[field_name]
                 setattr(self.instance.attr, attribute.code, value)
-        super(ProductForm, self)._post_clean()
+        super()._post_clean()
 
 
 class StockAlertSearchForm(forms.Form):
@@ -297,25 +328,26 @@ class ProductImageForm(forms.ModelForm):
 
     class Meta:
         model = ProductImage
-        fields = ['product', 'original', 'caption']
+        fields = ['product', 'original', 'caption', 'display_order']
         # use ImageInput widget to create HTML displaying the
         # actual uploaded image and providing the upload dialog
         # when clicking on the actual image.
         widgets = {
             'original': ImageInput(),
+            'display_order': forms.HiddenInput(),
         }
 
-    def save(self, *args, **kwargs):
-        # We infer the display order of the image based on the order of the
-        # image fields within the formset.
-        kwargs['commit'] = False
-        obj = super(ProductImageForm, self).save(*args, **kwargs)
-        obj.display_order = self.get_display_order()
-        obj.save()
-        return obj
+    def __init__(self, data=None, *args, **kwargs):
+        self.prefix = kwargs.get('prefix', None)
+        instance = kwargs.get('instance', None)
+        if not instance:
+            initial = {'display_order': self.get_display_order()}
+            initial.update(kwargs.get('initial', {}))
+            kwargs['initial'] = initial
+        super().__init__(data, *args, **kwargs)
 
     def get_display_order(self):
-        return self.prefix.split('-').pop()
+        return int(self.prefix.split('-').pop())
 
 
 class ProductRecommendationForm(forms.ModelForm):
@@ -330,6 +362,12 @@ class ProductRecommendationForm(forms.ModelForm):
 
 class ProductClassForm(forms.ModelForm):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        remote_field = self._meta.model._meta.get_field('options').remote_field
+        self.fields["options"].widget = RelatedMultipleFieldWidgetWrapper(
+            self.fields["options"].widget, remote_field)
+
     class Meta:
         model = ProductClass
         fields = ['name', 'requires_shipping', 'track_stock', 'options']
@@ -338,7 +376,7 @@ class ProductClassForm(forms.ModelForm):
 class ProductAttributesForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
-        super(ProductAttributesForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # because we'll allow submission of the form with blank
         # codes so that we can generate them.
@@ -376,3 +414,10 @@ class AttributeOptionForm(forms.ModelForm):
     class Meta:
         model = AttributeOption
         fields = ['option']
+
+
+class OptionForm(forms.ModelForm):
+
+    class Meta:
+        model = Option
+        fields = ['name', 'type', 'required']

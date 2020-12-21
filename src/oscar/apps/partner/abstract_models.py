@@ -1,10 +1,9 @@
 from django.db import models, router
 from django.db.models import F, Value, signals
 from django.db.models.functions import Coalesce
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.functional import cached_property
 from django.utils.timezone import now
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from oscar.apps.partner.exceptions import InvalidStockAdjustment
@@ -13,20 +12,19 @@ from oscar.core.utils import get_default_currency
 from oscar.models.fields import AutoSlugField
 
 
-@python_2_unicode_compatible
 class AbstractPartner(models.Model):
     """
-    A fulfillment partner. An individual or company who can fulfil products.
+    A fulfilment partner. An individual or company who can fulfil products.
     E.g. for physical goods, somebody with a warehouse and means of delivery.
 
     Creating one or more instances of the Partner model is a required step in
     setting up an Oscar deployment. Many Oscar deployments will only have one
-    fulfillment partner.
+    fulfilment partner.
     """
-    code = AutoSlugField(_("Code"), max_length=128, unique=True,
+    code = AutoSlugField(_("Code"), max_length=128, unique=True, db_index=True,
                          populate_from='name')
     name = models.CharField(
-        pgettext_lazy(u"Partner's name", u"Name"), max_length=128, blank=True)
+        pgettext_lazy("Partner's name", "Name"), max_length=128, blank=True, db_index=True)
 
     #: A partner can have users assigned to it. This is used
     #: for access modelling in the permission-based dashboard
@@ -80,7 +78,6 @@ class AbstractPartner(models.Model):
         return self.display_name
 
 
-@python_2_unicode_compatible
 class AbstractStockRecord(models.Model):
     """
     A stock record.
@@ -112,24 +109,12 @@ class AbstractStockRecord(models.Model):
     price_currency = models.CharField(
         _("Currency"), max_length=12, default=get_default_currency)
 
-    # This is the base price for calculations - tax should be applied by the
-    # appropriate method.  We don't store tax here as its calculation is highly
-    # domain-specific.  It is NULLable because some items don't have a fixed
-    # price but require a runtime calculation (possible from an external
-    # service). Current field name `price_excl_tax` is deprecated and will be
-    # renamed into `price` in Oscar 2.0.
-    price_excl_tax = models.DecimalField(
-        _("Price (excl. tax)"), decimal_places=2, max_digits=12,
-        blank=True, null=True)
-
-    # Deprecated - will be removed in Oscar 2.0
-    price_retail = models.DecimalField(
-        _("Price (retail)"), decimal_places=2, max_digits=12,
-        blank=True, null=True)
-
-    # Deprecated - will be removed in Oscar 2.0
-    cost_price = models.DecimalField(
-        _("Cost Price"), decimal_places=2, max_digits=12,
+    # This is the base price for calculations - whether this is inclusive or exclusive of
+    # tax depends on your implementation, as this is highly domain-specific.
+    # It is nullable because some items don't have a fixed
+    # price but require a runtime calculation (possibly from an external service).
+    price = models.DecimalField(
+        _("Price"), decimal_places=2, max_digits=12,
         blank=True, null=True)
 
     #: Number of items in stock
@@ -137,8 +122,9 @@ class AbstractStockRecord(models.Model):
         _("Number in stock"), blank=True, null=True)
 
     #: The amount of stock allocated to orders but not fed back to the master
-    #: stock system.  A typical stock update process will set the num_in_stock
-    #: variable to a new value and reset num_allocated to zero
+    #: stock system.  A typical stock update process will set the
+    #: :py:attr:`.num_in_stock` variable to a new value and reset
+    #: :py:attr:`.num_allocated` to zero.
     num_allocated = models.IntegerField(
         _("Number allocated"), blank=True, null=True)
 
@@ -153,10 +139,10 @@ class AbstractStockRecord(models.Model):
                                         db_index=True)
 
     def __str__(self):
-        msg = u"Partner: %s, product: %s" % (
+        msg = "Partner: %s, product: %s" % (
             self.partner.display_name, self.product,)
         if self.partner_sku:
-            msg = u"%s (%s)" % (msg, self.partner_sku)
+            msg = "%s (%s)" % (msg, self.partner_sku)
         return msg
 
     class Meta:
@@ -169,11 +155,11 @@ class AbstractStockRecord(models.Model):
     @property
     def net_stock_level(self):
         """
-        The effective number in stock (eg available to buy).
+        The effective number in stock (e.g. available to buy).
 
-        This is correct property to show the customer, not the num_in_stock
-        field as that doesn't account for allocations.  This can be negative in
-        some unusual circumstances
+        This is correct property to show the customer, not the
+        :py:attr:`.num_in_stock` field as that doesn't account for allocations.
+        This can be negative in some unusual circumstances
         """
         if self.num_in_stock is None:
             return 0
@@ -267,7 +253,6 @@ class AbstractStockRecord(models.Model):
         return self.net_stock_level < self.low_stock_threshold
 
 
-@python_2_unicode_compatible
 class AbstractStockAlert(models.Model):
     """
     A stock alert. E.g. used to notify users when a product is 'back in stock'.
@@ -285,7 +270,7 @@ class AbstractStockAlert(models.Model):
     )
     status = models.CharField(_("Status"), max_length=128, default=OPEN,
                               choices=status_choices)
-    date_created = models.DateTimeField(_("Date Created"), auto_now_add=True)
+    date_created = models.DateTimeField(_("Date Created"), auto_now_add=True, db_index=True)
     date_closed = models.DateTimeField(_("Date Closed"), blank=True, null=True)
 
     def close(self):

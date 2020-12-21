@@ -1,8 +1,8 @@
 from decimal import Decimal as D
-from oscar.core.loading import get_model
 
 from django.test import TestCase
 
+from oscar.core.loading import get_model
 from oscar.test import factories
 
 Partner = get_model('partner', 'Partner')
@@ -15,10 +15,10 @@ class TestStockRecord(TestCase):
     def setUp(self):
         self.product = factories.create_product()
         self.stockrecord = factories.create_stockrecord(
-            self.product, price_excl_tax=D('10.00'), num_in_stock=10)
+            self.product, price=D('10.00'), num_in_stock=10)
 
     def test_get_price_excl_tax_returns_correct_value(self):
-        self.assertEqual(D('10.00'), self.stockrecord.price_excl_tax)
+        self.assertEqual(D('10.00'), self.stockrecord.price)
 
     def test_net_stock_level_with_no_allocation(self):
         self.assertEqual(10, self.stockrecord.net_stock_level)
@@ -64,7 +64,7 @@ class TestStockRecordNoStockTrack(TestCase):
     def test_allocate_does_nothing(self):
         product = factories.ProductFactory(product_class=self.product_class)
         stockrecord = factories.create_stockrecord(
-            product, price_excl_tax=D('10.00'), num_in_stock=10)
+            product, price=D('10.00'), num_in_stock=10)
 
         self.assertFalse(stockrecord.can_track_allocations)
         stockrecord.allocate(5)
@@ -76,7 +76,7 @@ class TestStockRecordNoStockTrack(TestCase):
         child_product = factories.ProductFactory(
             parent=parent_product, product_class=None, structure='child')
         stockrecord = factories.create_stockrecord(
-            child_product, price_excl_tax=D('10.00'), num_in_stock=10)
+            child_product, price=D('10.00'), num_in_stock=10)
 
         self.assertFalse(stockrecord.can_track_allocations)
         stockrecord.allocate(5)

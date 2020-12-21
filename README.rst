@@ -20,7 +20,7 @@ Contents:
     :target: http://oscarcommerce.com
 
 .. image:: https://github.com/django-oscar/django-oscar/raw/master/docs/images/screenshots/readthedocs.thumb.png
-    :target: https://django-oscar.readthedocs.io/en/latest/
+    :target: https://django-oscar.readthedocs.io/en/stable/
 
 Further reading:
 
@@ -29,10 +29,7 @@ Further reading:
 * `Documentation`_ on the excellent `readthedocs.org`_
 * `Docker image`_ on http://hub.docker.com/
 * `django-oscar group`_ - mailing list for questions and announcements
-* `django-oscar-jobs group`_ - mailing list for job offers
-* `Continuous integration homepage`_ on `travis-ci.org`_
 * `Twitter account for news and updates`_
-* #django-oscar on Freenode (community-run IRC channel) with `public logs`_
 * `Slack`_
 * `PyPI page`_
 * `Transifex project`_ - translating Oscar made easy
@@ -41,8 +38,7 @@ Further reading:
 
 Continuous integration status:
 
-.. image:: https://travis-ci.org/django-oscar/django-oscar.svg?branch=master
-    :target: https://travis-ci.org/django-oscar/django-oscar
+.. image:: https://github.com/django-oscar/django-oscar/workflows/Tests/badge.svg
 
 .. image:: http://codecov.io/github/django-oscar/django-oscar/coverage.svg?branch=master
     :alt: Coverage
@@ -66,16 +62,12 @@ Docs status:
 .. end-no-pypi
 
 .. _`Official homepage`: http://oscarcommerce.com
-.. _`Sandbox site`: http://latest.oscarcommerce.com
+.. _`Sandbox site`: https://latest.oscarcommerce.com
 .. _`Docker image`: https://hub.docker.com/r/oscarcommerce/django-oscar-sandbox/
-.. _`Documentation`: https://django-oscar.readthedocs.io/en/latest/
+.. _`Documentation`: https://django-oscar.readthedocs.io/en/stable/
 .. _`readthedocs.org`: http://readthedocs.org
-.. _`Continuous integration homepage`: http://travis-ci.org/#!/django-oscar/django-oscar
-.. _`travis-ci.org`: http://travis-ci.org/
 .. _`Twitter account for news and updates`: https://twitter.com/#!/django_oscar
-.. _`public logs`: https://botbot.me/freenode/django-oscar/
 .. _`django-oscar group`: https://groups.google.com/forum/?fromgroups#!forum/django-oscar
-.. _`django-oscar-jobs group`: https://groups.google.com/forum/?fromgroups#!forum/django-oscar-jobs
 .. _`PyPI page`: https://pypi.python.org/pypi/django-oscar/
 .. _`Transifex project`: https://www.transifex.com/projects/p/django-oscar/
 .. _`Slack`: https://slack.oscarcommerce.com/
@@ -97,6 +89,24 @@ Core team:
 .. _`Michael van Tellingen`: https://github.com/mvantellingen
 .. _`Alexander Gaevsky`: https://github.com/sasha0
 .. _`Samir Shah`: https://github.com/solarissmoke
+
+
+Supported versions
+------------------
+
+The currently supported versions of Oscar are:
+
++---------+----------------+
+| Version | End of support |
++=========+================+
+| 3.0     | April 2021     |
++---------+----------------+
+| 2.1 LTS | August 2023    |
++---------+----------------+
+
+Supported verions are eligible for fixes for data loss bugs and security issues. Releases designated as
+Long-term support (LTS) releases will receive support for an extended period of 3 years from their release date.
+
 
 Screenshots
 -----------
@@ -122,16 +132,13 @@ good starting point for rapidly building elegant e-commerce sites.
 .. image:: https://github.com/django-oscar/django-oscar/raw/master/docs/images/screenshots/dashboard.thumb.png
     :target: https://github.com/django-oscar/django-oscar/raw/master/docs/images/screenshots/dashboard.png
 
-The sandbox site is also available to browse at
-https://latest.oscarcommerce.com.  Dashboard users can be created using `this
-gateway page`_.
+The sandbox site is also available to browse at https://latest.oscarcommerce.com.
 
 The sandbox site can be set-up locally `in 5 commands`_.  Want to
 make changes?  Check out the `contributing guidelines`_.
 
-.. _`this gateway page`: http://latest.oscarcommerce.com/gateway/
-.. _`in 5 commands`: https://django-oscar.readthedocs.io/en/latest/internals/sandbox.html#running-the-sandbox-locally
-.. _`contributing guidelines`: https://django-oscar.readthedocs.io/en/latest/internals/contributing/index.html
+.. _`in 5 commands`: https://django-oscar.readthedocs.io/en/stable/internals/sandbox.html#running-the-sandbox-locally
+.. _`contributing guidelines`: https://django-oscar.readthedocs.io/en/stable/internals/contributing/index.html
 
 
 Extensions
@@ -157,11 +164,12 @@ The following extensions are stable and ready for use:
 * django-oscar-stores_ - Physical stores integration (opening hours, store
   locator etc)
 
-* django-oscar-eway_ - Integration with the eWay_ payment gateway.
-
 * django-oscar-sagepay-direct_ - Integration with "DIRECT" part of Sagepay's API
 
 * django_oscar_docdata_ - Integration with Docdata_ payment gateway.
+
+* django_oscar_invoices_ - Invoices or receipts generation for the
+  Oscar
 
 .. _django-oscar-api: https://github.com/django-oscar/django-oscar-api
 .. _django-oscar-adyen: https://github.com/django-oscar/django-oscar-adyen
@@ -175,22 +183,18 @@ The following extensions are stable and ready for use:
 .. _django-oscar-accounts: https://github.com/django-oscar/django-oscar-accounts
 .. _django-oscar-easyrec: https://github.com/django-oscar/django-oscar-easyrec
 .. _EasyRec: http://easyrec.org/
-.. _django-oscar-eway: https://github.com/snowball-one/django-oscar-eway
 .. _django-oscar-stores: https://github.com/django-oscar/django-oscar-stores
 .. _django-oscar-sagepay-direct: https://github.com/django-oscar/django-oscar-sagepay-direct
 .. _eWay: https://www.eway.com.au
 .. _django_oscar_docdata: https://github.com/django-oscar/django-oscar-docdata
 .. _Docdata: https://www.docdatapayments.com/
+.. _django_oscar_invoices: https://github.com/django-oscar/django-oscar-invoices
 
 The following are community-written extensions:
 
 * django-oscar-payments_ - Pluggable payments for Oscar
-* django-oscar-recurly_ - Integration with the Recurly payment gateway
 
-* django-oscar-przelewy24_ - Integration with the Przelewy24 payment gateway
 * oscar-sagepay_ - Payment integration with Sage Pay
-* django-oscar-erp_
-* django-oscar-sofortueberweisung_ - Integration with SOFORT
 
 * django-oscar-support_ - Customer services and ticketing plugin for Oscar
 
@@ -220,15 +224,8 @@ The following are community-written extensions:
 
 Let us know if you're writing a new one!
 
-.. _django-oscar-unicredit: https://bitbucket.org/marsim/django-oscar-unicredit/
-.. _django-oscar-erp: https://bitbucket.org/zikzakmedia/django-oscar_erp
 .. _django-oscar-payments: https://github.com/Lacrymology/django-oscar-payments
-.. _django-oscar-recurly: https://github.com/mynameisgabe/django-oscar-recurly
-
-.. _django-oscar-przelewy24: https://github.com/kisiel/django-oscar-przelewy24
 .. _oscar-sagepay: https://github.com/udox/oscar-sagepay
-.. _django-oscar-sofortueberweisung: https://github.com/byteyard/django-oscar-sofortueberweisung
-
 .. _django-oscar-support: https://github.com/SalahAdDin/django-oscar-support
 .. _django-oscar-api-checkout: https://github.com/thelabnyc/django-oscar-api-checkout
 .. _django-oscar-bundles: https://github.com/thelabnyc/django-oscar-bundles

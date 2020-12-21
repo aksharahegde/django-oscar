@@ -14,18 +14,18 @@ WeightBand = get_model('shipping', 'WeightBand')
 
 class WeightBasedListView(generic.ListView):
     model = WeightBased
-    template_name = "dashboard/shipping/weight_based_list.html"
+    template_name = "oscar/dashboard/shipping/weight_based_list.html"
     context_object_name = "methods"
 
 
 class WeightBasedCreateView(generic.CreateView):
     model = WeightBased
     form_class = WeightBasedForm
-    template_name = "dashboard/shipping/weight_based_form.html"
+    template_name = "oscar/dashboard/shipping/weight_based_form.html"
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/method_created.html',
+            'oscar/dashboard/shipping/messages/method_created.html',
             {'method': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-detail',
@@ -35,27 +35,27 @@ class WeightBasedCreateView(generic.CreateView):
 class WeightBasedDetailView(generic.CreateView):
     model = WeightBand
     form_class = WeightBandForm
-    template_name = "dashboard/shipping/weight_based_detail.html"
+    template_name = "oscar/dashboard/shipping/weight_based_detail.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.method = shortcuts.get_object_or_404(
             WeightBased, pk=kwargs['pk'])
-        return super(WeightBasedDetailView, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get_form_kwargs(self, **kwargs):
-        kwargs = super(WeightBasedDetailView, self).get_form_kwargs(**kwargs)
+        kwargs = super().get_form_kwargs(**kwargs)
         kwargs['method'] = self.method
         return kwargs
 
     def get_context_data(self, **kwargs):
-        ctx = super(WeightBasedDetailView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['method'] = self.method
         return ctx
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/band_created.html',
+            'oscar/dashboard/shipping/messages/band_created.html',
             {'band': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-detail',
@@ -65,12 +65,12 @@ class WeightBasedDetailView(generic.CreateView):
 class WeightBasedUpdateView(generic.UpdateView):
     model = WeightBased
     form_class = WeightBasedForm
-    template_name = "dashboard/shipping/weight_based_form.html"
+    template_name = "oscar/dashboard/shipping/weight_based_form.html"
     context_object_name = "method"
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/method_updated.html',
+            'oscar/dashboard/shipping/messages/method_updated.html',
             {'method': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-detail',
@@ -80,26 +80,26 @@ class WeightBasedUpdateView(generic.UpdateView):
 class WeightBandUpdateView(generic.UpdateView):
     model = WeightBand
     form_class = WeightBandForm
-    template_name = "dashboard/shipping/weight_band_form.html"
+    template_name = "oscar/dashboard/shipping/weight_band_form.html"
     context_object_name = "band"
 
     def dispatch(self, request, *args, **kwargs):
         self.method = shortcuts.get_object_or_404(
             WeightBased, pk=kwargs['method_pk'])
-        return super(WeightBandUpdateView, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get_queryset(self):
         return self.method.bands.all()
 
     def get_form_kwargs(self, **kwargs):
-        kwargs = super(WeightBandUpdateView, self).get_form_kwargs(**kwargs)
+        kwargs = super().get_form_kwargs(**kwargs)
         kwargs['method'] = self.method
         return kwargs
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/band_updated.html',
+            'oscar/dashboard/shipping/messages/band_updated.html',
             {'band': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-detail',
@@ -108,13 +108,13 @@ class WeightBandUpdateView(generic.UpdateView):
 
 class WeightBandDeleteView(generic.DeleteView):
     model = WeightBased
-    template_name = "dashboard/shipping/weight_band_delete.html"
+    template_name = "oscar/dashboard/shipping/weight_band_delete.html"
     context_object_name = "band"
 
     def dispatch(self, request, *args, **kwargs):
         self.method = shortcuts.get_object_or_404(
             WeightBased, pk=kwargs['method_pk'])
-        return super(WeightBandDeleteView, self).dispatch(
+        return super().dispatch(
             request, *args, **kwargs)
 
     def get_queryset(self):
@@ -122,7 +122,7 @@ class WeightBandDeleteView(generic.DeleteView):
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/band_deleted.html',
+            'oscar/dashboard/shipping/messages/band_deleted.html',
             {'band': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-detail',
@@ -131,12 +131,12 @@ class WeightBandDeleteView(generic.DeleteView):
 
 class WeightBasedDeleteView(generic.DeleteView):
     model = WeightBased
-    template_name = "dashboard/shipping/weight_based_delete.html"
+    template_name = "oscar/dashboard/shipping/weight_based_delete.html"
     context_object_name = "method"
 
     def get_success_url(self):
         msg = render_to_string(
-            'dashboard/shipping/messages/method_deleted.html',
+            'oscar/dashboard/shipping/messages/method_deleted.html',
             {'method': self.object})
         messages.success(self.request, msg, extra_tags='safe noicon')
         return reverse('dashboard:shipping-method-list')

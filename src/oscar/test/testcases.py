@@ -1,6 +1,7 @@
+from http import client as http_client
+
 from django.contrib.auth.models import Permission
 from django.urls import reverse
-from django.utils.six.moves import http_client
 from django_webtest import WebTest
 from purl import URL
 
@@ -105,3 +106,8 @@ class WebTestCase(WebTest):
         self.assertContext(response)
         self.assertTrue(key in response.context,
                         "Context should contain a variable '%s'" % key)
+
+    def assertNotInContext(self, response, key):
+        self.assertContext(response)
+        self.assertTrue(key not in response.context,
+                        "Context should not contain a variable '%s'" % key)
